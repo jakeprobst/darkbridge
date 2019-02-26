@@ -6,3 +6,5 @@ authors = ["Jake Probst <jake.probst@gmail.com>"]
 [dependencies]
 "byteorder" = "1"
 "mio" = "0.6"
+"nix" = "0.13.0"
+"libc" = "*"
