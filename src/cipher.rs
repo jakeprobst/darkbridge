@@ -17,6 +17,7 @@ const CIPHER_LEN: usize = 521;
 
 
 
+#[derive(Clone)]
 pub struct Cipher {
     seed: u32,
     key: [u32; 521],
@@ -112,7 +113,7 @@ impl Cipher {
         [key as u8, (key >> 8) as u8, (key >> 16) as u8, (key >> 24) as u8]
     }
     
-    pub fn encrypt(&mut self, buf: Vec<u8>) -> Vec<u8> {
+    pub fn encrypt(&mut self, buf: &Vec<u8>) -> Vec<u8> {
         let mut out = Vec::new();
         for chunk in buf.chunks(4) {
             let key = self.next_key();
