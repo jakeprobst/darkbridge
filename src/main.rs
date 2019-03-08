@@ -5,6 +5,7 @@ extern crate libc;
 
 mod proxy;
 mod cipher;
+mod gamecommand;
 mod packet;
 mod connection;
 
