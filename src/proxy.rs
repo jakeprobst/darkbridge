@@ -12,8 +12,8 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use nix::unistd;
 use nix::sys::stat;
 
-use packet::Packet;
-use cipher::Cipher;
+use crate::packet::Packet;
+use crate::cipher::Cipher;
 
 //const PSOPORT: u16 = 9410;
 const PSOPORT: u16 = 9100;

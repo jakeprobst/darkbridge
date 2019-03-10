@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use std::io::{Read, Write};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian, BigEndian};
-use gamecommand::*;
+use crate::gamecommand::*;
 
 trait PacketData {
     fn parse(cmd: u8, flag: u8, data: &Vec<u8>) -> Self where Self: Sized;

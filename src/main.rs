@@ -1,14 +1,7 @@
-extern crate byteorder;
-extern crate mio;
-extern crate nix;
-extern crate libc;
-
 mod proxy;
 mod cipher;
 mod gamecommand;
 mod packet;
-mod connection;
-
 
 use proxy::Proxy;
 
