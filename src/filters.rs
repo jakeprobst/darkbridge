@@ -13,8 +13,6 @@ pub enum TargettedPacket {
 }
 
 pub type Filter = Fn(TargettedPacket, &mut Proxy) -> Vec<TargettedPacket>;
-//pub type Filter = fn(Option<TargettedPacket>, GameState) -> (Option<TargettedPacket>);
-
 
 pub fn connection_redirect(mut pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
     if let TargettedPacket::Client(ref mut pkt) = pkt {
@@ -61,7 +59,6 @@ pub fn save_position(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPa
                 proxy.gamestate.floor = action.floor;
             }
         }
-        println!("player pos: {:?}", proxy.gamestate.position);
     }
 
     vec![pkt]
