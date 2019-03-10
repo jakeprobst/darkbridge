@@ -51,14 +51,14 @@ pub struct Proxy {
 }
 
 pub fn print_buffer(pkt: &Vec<u8>) {
-    for row in pkt.chunks(16) {
+    for (i, row) in pkt.chunks(16).enumerate() {
         let mut hexbuf = Vec::new();
         let mut asciibuf = Vec::new();
         for item in row {
             hexbuf.push(format!("{:02X}", item));
             asciibuf.push(format!("{}", if *item > 0x20 && *item < 0x7E {*item as char} else {'.'}));
         }
-        println!("| {:47} | {:16} |", hexbuf.join(" "), asciibuf.join(""));
+        println!("{:04X} | {:47} | {:16} |", i*16, hexbuf.join(" "), asciibuf.join(""));
     }
 }
 
