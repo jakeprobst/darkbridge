@@ -12,42 +12,54 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use nix::unistd;
 use nix::sys::stat;
 
+use crate::filters;
+use crate::filters::TargettedPacket;
 use crate::packet::Packet;
 use crate::cipher::Cipher;
 
-//const PSOPORT: u16 = 9410;
 const PSOPORT: u16 = 9100;
 
-const GAMECUBE: Token = Token(0);
-const SERVER: Token = Token(1);
-const LISTENER: Token = Token(2);
-const CMDPIPE: Token = Token(3);
+pub const GAMECUBE: Token = Token(0);
+pub const SERVER: Token = Token(1);
+pub const LISTENER: Token = Token(2);
+pub const CMDPIPE: Token = Token(3);
 
-use std::time::Duration;
-
+#[derive(Debug)]
 pub struct Position {
-    x: f32,
-    y: f32,
-    z: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
-pub struct PlayerData {
-    position: Option<Position>
+pub struct GameState {
+    pub self_client: u8,
+    pub floor: u32,
+    pub position: Position
 }
 
-impl PlayerData {
-    pub fn new() -> PlayerData {
-        PlayerData {
-            position: None,
+impl GameState {
+    pub fn new() -> GameState {
+        GameState {
+            self_client: 0,
+            floor: 0,
+            position: Position {x:0.0, y:0.0, z:0.0},
         }
     }
 }
 
 pub struct Proxy {
-    gamecube: TcpStream,
-    server: TcpStream,
+    pub gamecube: TcpStream,
+    pub server: TcpStream,
+    pub listener: Option<TcpListener>,
     cmd_pipe: File,
-    playerdata: PlayerData,
+    pub poll: Poll,
+
+    pub gamestate: GameState,
+
+    pub server2proxy: Option<Cipher>,
+    pub proxy2server: Option<Cipher>,
+    pub gamecube2proxy: Option<Cipher>,
+    pub proxy2gamecube: Option<Cipher>,
 }
 
 pub fn print_buffer(pkt: &Vec<u8>) {
@@ -63,12 +75,10 @@ pub fn print_buffer(pkt: &Vec<u8>) {
 }
 
 fn get_packet(mut sock: &TcpStream, cipher: &mut Option<Cipher>) -> Option<Packet> {
-    println!("get_packet");
     let mut local_cipher = cipher.clone();
 
     let mut header = vec![0u8; 4];
     if let Err(_e) = sock.peek(&mut header) {
-        println!("could not read header");
         return None;
     }
 
@@ -95,16 +105,16 @@ fn get_packet(mut sock: &TcpStream, cipher: &mut Option<Cipher>) -> Option<Packe
     let mut data_buf = vec![0u8; len as usize - 4];
     sock.read_exact(&mut header_enc).unwrap();
     sock.read_exact(&mut data_buf).unwrap();
-    
+
     if let Some(ref mut cipher) = local_cipher {
         data_buf = cipher.encrypt(&data_buf.to_vec());
     };
-    
+
     *cipher = local_cipher;
 
     let pkt = Packet::parse(cmd, flag, len, &data_buf);
     print_buffer(&header.into_iter().chain(data_buf.into_iter()).collect());
-    
+
     Some(pkt)
 }
 
@@ -124,114 +134,108 @@ impl Proxy {
     pub fn new(sock: net::TcpStream) -> Proxy {
         //let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(172,245,5,200), PSOPORT))).unwrap();
         let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(99,199,199,42), PSOPORT))).unwrap();
+        //let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(27, 134, 247, 108), PSOPORT))).unwrap();
 
-        // TODO: delete and remake
+        // TODO: delete and remake fifo pipe
         let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
         let cmd_pipe = OpenOptions::new()
             .custom_flags(libc::O_NONBLOCK)
             .read(true)
             .open("/tmp/darkbridge").unwrap();
         println!("does it hang?");
-        
+
         Proxy {
             gamecube: TcpStream::from_stream(sock).unwrap(),
             server: server,
+            listener: None,
             cmd_pipe: cmd_pipe,
-            playerdata: PlayerData::new(),
+            poll: Poll::new().unwrap(),
+            gamestate: GameState::new(),
+            server2proxy: None,
+            proxy2server: None,
+            gamecube2proxy: None,
+            proxy2gamecube: None,
         }
     }
 
-    fn handle_client_packet(&mut self, pkt: Packet) -> Option<Packet> {
-        Some(pkt)
+    fn filter_and_send(&mut self, filters: &Vec<Box<filters::Filter>>, pkt: TargettedPacket) {
+        let mut workingset_pkts = vec![pkt];
+        for filter in filters.iter() {
+            let mut result_pkts = Vec::new();
+            for p in workingset_pkts {
+                result_pkts.extend(filter(p, self));
+            }
+            workingset_pkts = result_pkts;
+        }
+
+        for pkt_to_send in workingset_pkts {
+            match pkt_to_send {
+                TargettedPacket::Client(p) => {
+                    send_packet(&mut self.gamecube, &p, &mut self.proxy2gamecube);
+
+                    if let Packet::EncryptionKeys(ref keys) = p {
+                        println!("encryption keys! c: {:08X} s: {:08X}", keys.client_seed, keys.server_seed);
+                        self.server2proxy = Some(Cipher::new(keys.server_seed));
+                        self.proxy2server = Some(Cipher::new(keys.client_seed));
+                        self.proxy2gamecube = Some(Cipher::new(keys.server_seed));
+                        self.gamecube2proxy = Some(Cipher::new(keys.client_seed));
+                    }
+                },
+                TargettedPacket::Server(p) => {
+                    send_packet(&mut self.server, &p, &mut self.proxy2server);
+                }
+            }
+        }
+
     }
-    
-    fn handle_server_packet(&mut self, pkt: Packet) -> Option<Packet> {
-        Some(pkt)
-    }
 
-    pub fn run(&mut self) {
-        let poll = Poll::new().unwrap();
+    pub fn run(&mut self){
+        self.poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
+        self.poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
+        self.poll.register(&EventedFd(&self.cmd_pipe.as_raw_fd()), CMDPIPE, Ready::readable(), PollOpt::edge()).unwrap();
 
-        poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
-        poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
-        poll.register(&EventedFd(&self.cmd_pipe.as_raw_fd()), CMDPIPE, Ready::readable(), PollOpt::edge()).unwrap();
+        let mut filters: Vec<Box<filters::Filter>> = Vec::new();
+        filters.push(Box::new(filters::connection_redirect));
+        filters.push(Box::new(filters::save_position));
 
-        let mut listener = None;
-        
         let mut events = Events::with_capacity(64);
 
-        let mut server2proxy = None;
-        let mut proxy2server = None;
-        let mut gamecube2proxy = None;
-        let mut proxy2gamecube = None;
-
         loop {
-            poll.poll(&mut events, None).unwrap();
-            
+            self.poll.poll(&mut events, None).unwrap();
+
+            //let mut packet_queue = Vec::new();
+
             for event in events.iter() {
                 match event.token() {
                     GAMECUBE => {
                         println!("[GAMECUBE]");
-                        while let Some(mut pkt) = get_packet(&self.gamecube, &mut gamecube2proxy) {
+                        while let Some(mut pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
                             println!("gc! {:?}", pkt);
-
-                            if let Some(p) = self.handle_client_packet(pkt) {
-                                send_packet(&mut self.server, &p, &mut proxy2server);
-                            }
+                            self.filter_and_send(&filters, TargettedPacket::Server(pkt));
                         }
                     },
                     SERVER => {
                         println!("[SERVER]");
-                        while let Some(mut pkt) = get_packet(&self.server, &mut server2proxy) {
+                        while let Some(mut pkt) = get_packet(&self.server, &mut self.server2proxy) {
                             println!("serv! {:?}", pkt);
-                            if let Packet::Redirect(ref mut redirect) = pkt {
-                                println!("redirecting! {:?}:{}", redirect.ip, redirect.port);
-                                let new_sock = TcpStream::connect(&SocketAddr::from((redirect.ip, redirect.port))).unwrap();
-                                //poll.deregister(&self.server).unwrap();
-                                self.server = new_sock;
-                                poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
-
-                                server2proxy = None;
-                                proxy2server = None;
-
-                                redirect.ip = [192, 168, 1, 10];
-                                let ls = TcpListener::bind(&SocketAddr::from((Ipv4Addr::new(0,0,0,0), 0))).unwrap();
-                                redirect.port = ls.local_addr().unwrap().port();
-                                println!("re-redirecting! {:?}:{}", redirect.ip, redirect.port);
-                                poll.register(&ls, LISTENER, Ready::readable(), PollOpt::edge()).unwrap();
-                                poll.deregister(&self.server).unwrap();
-                                println!("listening on: {:?}", ls);
-                                listener = Some(ls);
-                            }
-
-                            if let Some(p) = self.handle_server_packet(pkt.clone()) {
-                                send_packet(&mut self.gamecube, &p, &mut proxy2gamecube);
-                            }
-                           
-                            if let Packet::EncryptionKeys(ref keys) = pkt {
-                                println!("encryption keys! c: {:08X} s: {:08X}", keys.client_seed, keys.server_seed);
-                                server2proxy = Some(Cipher::new(keys.server_seed));
-                                proxy2server = Some(Cipher::new(keys.client_seed));
-                                proxy2gamecube = Some(Cipher::new(keys.server_seed));
-                                gamecube2proxy = Some(Cipher::new(keys.client_seed));
-                            }
+                            self.filter_and_send(&filters, TargettedPacket::Client(pkt));
                         }
                     },
                     LISTENER => {
                         println!("[LISTENER]");
-                        if let Some(listener) = listener {
+                        if let Some(ref mut listener) = self.listener {
                             println!("accepting!");
                             self.gamecube = listener.accept().unwrap().0;
                             println!("accepted new gc: {:?}", self.gamecube);
-                            server2proxy = None;
-                            proxy2server = None;
-                            gamecube2proxy = None;
-                            proxy2gamecube = None;
-                            poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
-                            poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
+                            self.server2proxy = None;
+                            self.proxy2server = None;
+                            self.gamecube2proxy = None;
+                            self.proxy2gamecube = None;
+                            self.poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
+                            self.poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
                             //listener.shutdown();
                         }
-                        listener = None;
+                        self.listener = None;
                     },
                     CMDPIPE => {
                         println!("[CMDPIPE]");

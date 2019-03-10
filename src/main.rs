@@ -1,3 +1,4 @@
+mod filters;
 mod proxy;
 mod cipher;
 mod gamecommand;
