@@ -209,14 +209,14 @@ impl Proxy {
                 match event.token() {
                     GAMECUBE => {
                         println!("[GAMECUBE]");
-                        while let Some(mut pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
+                        while let Some(pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
                             println!("gc! {:?}", pkt);
                             self.filter_and_send(&filters, TargettedPacket::Server(pkt));
                         }
                     },
                     SERVER => {
                         println!("[SERVER]");
-                        while let Some(mut pkt) = get_packet(&self.server, &mut self.server2proxy) {
+                        while let Some(pkt) = get_packet(&self.server, &mut self.server2proxy) {
                             println!("serv! {:?}", pkt);
                             self.filter_and_send(&filters, TargettedPacket::Client(pkt));
                         }
