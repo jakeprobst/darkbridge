@@ -41,21 +41,6 @@ pub fn connection_redirect(mut pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<T
     vec![pkt]
 }
 
-/*pub fn set_encryption(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
-    if let TargettedPacket::Client(ref cpkt) = pkt {
-        if let Packet::EncryptionKeys(keys) = cpkt {
-            println!("encryption keys filter! c: {:08X} s: {:08X}", keys.client_seed, keys.server_seed);
-            proxy.server2proxy = Some(Cipher::new(keys.server_seed));
-            proxy.proxy2server = Some(Cipher::new(keys.client_seed));
-            //self.proxy2gamecube = Some(Cipher::new(keys.server_seed));
-            //self.gamecube2proxy = Some(Cipher::new(keys.client_seed));
-            //return Vec::new();
-        }
-    }
-    vec![pkt]
-}*/
-
-
 pub fn save_position(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
     if let TargettedPacket::Server(ref spkt) = pkt {
         if let Packet::GameCommand(cmd) = spkt {
@@ -81,17 +66,3 @@ pub fn save_position(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPa
 
     vec![pkt]
 }
-
-
-
-
-
-
-/*fn passthrough(pkt: Option<Packet>, gamestate: &mut GameState) -> Option<Packet> {
-
-
-
-
-    pkt
-}
-*/
