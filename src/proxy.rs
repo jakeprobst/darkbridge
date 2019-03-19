@@ -16,6 +16,7 @@ use crate::filters;
 use crate::filters::TargettedPacket;
 use crate::packet::Packet;
 use crate::cipher::Cipher;
+use crate::commands::{Command, CommandRunner};
 
 const PSOPORT: u16 = 9100;
 
@@ -34,7 +35,8 @@ pub struct Position {
 pub struct GameState {
     pub self_client: u8,
     pub floor: u32,
-    pub position: Position
+    pub position: Position,
+    pub itemdrop_id: u32,
 }
 
 impl GameState {
@@ -43,6 +45,7 @@ impl GameState {
             self_client: 0,
             floor: 0,
             position: Position {x:0.0, y:0.0, z:0.0},
+            itemdrop_id: 0x11223344,
         }
     }
 }
@@ -51,7 +54,7 @@ pub struct Proxy {
     pub gamecube: TcpStream,
     pub server: TcpStream,
     pub listener: Option<TcpListener>,
-    cmd_pipe: File,
+    //cmd_pipe: File,
     pub poll: Poll,
 
     pub gamestate: GameState,
@@ -137,18 +140,17 @@ impl Proxy {
         //let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(27, 134, 247, 108), PSOPORT))).unwrap();
 
         // TODO: delete and remake fifo pipe
-        let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
+        /*let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
         let cmd_pipe = OpenOptions::new()
             .custom_flags(libc::O_NONBLOCK)
             .read(true)
-            .open("/tmp/darkbridge").unwrap();
-        println!("does it hang?");
+            .open("/tmp/darkbridge").unwrap();*/
 
         Proxy {
             gamecube: TcpStream::from_stream(sock).unwrap(),
             server: server,
             listener: None,
-            cmd_pipe: cmd_pipe,
+            //cmd_pipe: cmd_pipe,
             poll: Poll::new().unwrap(),
             gamestate: GameState::new(),
             server2proxy: None,
@@ -158,18 +160,22 @@ impl Proxy {
         }
     }
 
-    fn filter_and_send(&mut self, filters: &Vec<Box<filters::Filter>>, pkt: TargettedPacket) {
-        let mut workingset_pkts = vec![pkt];
+    fn filter_packet(&mut self, filters: &Vec<Box<filters::Filter>>, pkt: TargettedPacket) -> Vec<TargettedPacket> {
+        let mut pkts = vec![pkt];
         for filter in filters.iter() {
             let mut result_pkts = Vec::new();
-            for p in workingset_pkts {
+            for p in pkts {
                 result_pkts.extend(filter(p, self));
             }
-            workingset_pkts = result_pkts;
+            pkts = result_pkts;
         }
+        pkts
+    }
 
-        for pkt_to_send in workingset_pkts {
-            match pkt_to_send {
+    // TODO: split! why did I think it was a good idea to have a function with and in the name?
+    fn send_packets(&mut self, pkts: Vec<TargettedPacket>) {
+        for pkt in pkts {
+            match pkt {
                 TargettedPacket::Client(p) => {
                     send_packet(&mut self.gamecube, &p, &mut self.proxy2gamecube);
 
@@ -190,9 +196,17 @@ impl Proxy {
     }
 
     pub fn run(&mut self){
+        let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
+        let mut cmd_pipe = OpenOptions::new()
+            .custom_flags(libc::O_NONBLOCK)
+            .read(true)
+            .open("/tmp/darkbridge").unwrap();
+
         self.poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
         self.poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
-        self.poll.register(&EventedFd(&self.cmd_pipe.as_raw_fd()), CMDPIPE, Ready::readable(), PollOpt::edge()).unwrap();
+        self.poll.register(&EventedFd(&cmd_pipe.as_raw_fd()), CMDPIPE, Ready::readable(), PollOpt::edge()).unwrap();
+
+        let mut commandrunner = CommandRunner::new();
 
         let mut filters: Vec<Box<filters::Filter>> = Vec::new();
         filters.push(Box::new(filters::connection_redirect));
@@ -203,28 +217,28 @@ impl Proxy {
         loop {
             self.poll.poll(&mut events, None).unwrap();
 
-            //let mut packet_queue = Vec::new();
-
             for event in events.iter() {
                 match event.token() {
                     GAMECUBE => {
                         println!("[GAMECUBE]");
                         while let Some(pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
                             println!("gc! {:?}", pkt);
-                            self.filter_and_send(&filters, TargettedPacket::Server(pkt));
+                            //self.filter_and_send(&filters, TargettedPacket::Server(pkt));
+                            let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Server(pkt));
+                            self.send_packets(filtered_pkts);
                         }
                     },
                     SERVER => {
                         println!("[SERVER]");
                         while let Some(pkt) = get_packet(&self.server, &mut self.server2proxy) {
                             println!("serv! {:?}", pkt);
-                            self.filter_and_send(&filters, TargettedPacket::Client(pkt));
+                            let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Client(pkt));
+                            self.send_packets(filtered_pkts);
                         }
                     },
                     LISTENER => {
                         println!("[LISTENER]");
                         if let Some(ref mut listener) = self.listener {
-                            println!("accepting!");
                             self.gamecube = listener.accept().unwrap().0;
                             println!("accepted new gc: {:?}", self.gamecube);
                             self.server2proxy = None;
@@ -239,11 +253,13 @@ impl Proxy {
                     },
                     CMDPIPE => {
                         println!("[CMDPIPE]");
-                        let cmdbuf = BufReader::new(&self.cmd_pipe);
+                        let cmdbuf = BufReader::new(&mut cmd_pipe);
                         for cmd in cmdbuf.lines() {
-                            //println!("cmd: {}", cmd.unwrap());
-                            /*for (target, pkt) in commands::handle_command(cmd) {
-                            }*/
+                            let command = Command::parse(cmd.unwrap().to_ascii_lowercase());
+                            if let Ok(c) = command {
+                                let pkts = commandrunner.run(c, self);
+                                self.send_packets(pkts);
+                            }
                         }
                     }
                     _ => unreachable!()

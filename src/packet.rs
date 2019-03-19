@@ -145,6 +145,7 @@ pub enum Packet {
 
     GameCommand(GameCommand),
     //ChatMessage(ChatMessage),
+    //ItemDrop(ItemDrop),
 
     RawData(RawData)
 }

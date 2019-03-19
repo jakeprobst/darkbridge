@@ -3,6 +3,8 @@ mod proxy;
 mod cipher;
 mod gamecommand;
 mod packet;
+mod commands;
+mod items;
 
 use proxy::Proxy;
 

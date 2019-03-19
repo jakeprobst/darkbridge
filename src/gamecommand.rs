@@ -33,6 +33,11 @@ impl GameCommandBytes {
         self
     }
 
+    fn _u32_be(mut self, item: u32) -> GameCommandBytes {
+        self.buffer.write_u32::<BigEndian>(item).unwrap();
+        self
+    }
+
     fn _f32(mut self, item: f32) -> GameCommandBytes {
         self.buffer.write_f32::<LittleEndian>(item).unwrap();
         self
@@ -41,7 +46,7 @@ impl GameCommandBytes {
     fn build(self) -> Vec<u8> {
         // TODO: assert size divisible by 4 bytes?
         let mut buf = Vec::new();
-        buf.write_u8(0x3E).unwrap();
+        buf.write_u8(self.cmd).unwrap();
         buf.write_u8(self.buffer.len() as u8 / 4 + 1).unwrap();
         buf.write_u8(0).unwrap();
         buf.write_u8(0).unwrap();
@@ -204,11 +209,63 @@ impl GameCommandData for RawGameCommand {
 }
 
 #[derive(Debug, Clone)]
+pub struct ItemDrop {
+    pub floor: u32,
+    pub x: f32,
+    pub z: f32,
+    pub item_row1: u32,
+    pub item_row2: u32,
+    pub item_row3: u32,
+    pub itemdrop_id: u32,
+    pub unknown2: u32,
+    pub unknown3: u32,
+}
+
+impl /*GameCommandData for*/ ItemDrop {
+    /*fn parse(gcmd: u8, data: &Vec<u8>) -> ItemDrop {
+        ItemDrop {
+        }
+}*/
+
+    //fn make_wep()
+    //fn make_armor()
+    //fn make_shield()
+    //fn make_tech()
+    //fn make_tool()
+    //fn make_mag()
+    //fn make_meseta()
+
+    fn as_bytes(&self) -> Vec<u8> {
+        GameCommandBytes::new()
+            .cmd(0x5D)
+            ._u32(self.floor)
+            ._f32(self.x)
+            ._f32(self.z)
+            ._u32_be(self.item_row1)
+            ._u32_be(self.item_row2)
+            ._u32_be(self.item_row3)
+            ._u32(self.itemdrop_id)
+            ._u32(self.unknown2)
+            ._u32(self.unknown3)
+            .build()
+        // TODO: self.size is based on 32 bit items, `assert len(self.data) % 4 == 0`?
+        /*let mut buf: Vec<u8> = Vec::new();
+        buf.write_u8(0x5D).unwrap();
+        buf.write_u8(0x0A).unwrap();
+        buf.write_u8(0).unwrap();
+        buf.write_u8(0).unwrap();
+        buf*/
+    }
+}
+
+
+#[derive(Debug, Clone)]
 pub enum GameCommandAction {
     PlayerWalk(PlayerWalk),
     PlayerRun(PlayerRun),
     PlayerStop(PlayerStop),
     PlayerArea(PlayerArea),
+    ItemDrop(ItemDrop),
 
     RawGameCommand(RawGameCommand),
 }
@@ -250,6 +307,7 @@ impl PacketData for GameCommand {
             GameCommandAction::PlayerStop(cmd) => cmd.as_bytes(),
             GameCommandAction::PlayerWalk(cmd) => cmd.as_bytes(),
             GameCommandAction::PlayerRun(cmd) => cmd.as_bytes(),
+            GameCommandAction::ItemDrop(cmd) => cmd.as_bytes(),
             GameCommandAction::RawGameCommand(cmd) => cmd.as_bytes(),
         };
 
