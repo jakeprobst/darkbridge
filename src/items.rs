@@ -12,6 +12,7 @@ pub enum ItemParseError {
     UnknownAttribute(String),
     UnknownTech(String),
     ParseIntError(std::num::ParseIntError),
+    HexError(hex::FromHexError),
 }
 
 impl From<std::num::ParseIntError> for ItemParseError {
@@ -20,10 +21,17 @@ impl From<std::num::ParseIntError> for ItemParseError {
     }
 }
 
+impl From<hex::FromHexError> for ItemParseError {
+    fn from(err: hex::FromHexError) -> ItemParseError {
+        ItemParseError::HexError(err)
+    }
+}
+
 pub trait ItemData: std::fmt::Debug {
     fn row1(&self) -> u32;
     fn row2(&self) -> u32;
     fn row3(&self) -> u32;
+    fn row4(&self) -> u32;
 }
 
 #[derive(Debug)]
@@ -516,8 +524,283 @@ impl TryFrom<&str> for WeaponType {
     fn try_from(value: &str) -> Result<WeaponType, Self::Error> {
         match value {
             "saber" => Ok(WeaponType::Saber),
-            "df" | "darkflow" => Ok(WeaponType::DarkFlow),
-            "rg" | "raygun" => Ok(WeaponType::Raygun),
+            "brand" => Ok(WeaponType::Brand),
+            "buster" => Ok(WeaponType::Buster),
+            "pallasch" => Ok(WeaponType::Pallasch),
+            "gladius" => Ok(WeaponType::Gladius),
+            "dbssaber" => Ok(WeaponType::DBsSaber),
+            "kaladbolg" => Ok(WeaponType::Kaladbolg),
+            "durandal" => Ok(WeaponType::Durandal),
+            "sword" => Ok(WeaponType::Sword),
+            "gigush" => Ok(WeaponType::Gigush),
+            "breaker" => Ok(WeaponType::Breaker),
+            "claymore" => Ok(WeaponType::Claymore),
+            "calibur" => Ok(WeaponType::Calibur),
+            "flowenssword" => Ok(WeaponType::FlowensSword),
+            "lastsurvivor" => Ok(WeaponType::LastSurvivor),
+            "dragonslayer" => Ok(WeaponType::DragonSlayer),
+            "dagger" => Ok(WeaponType::Dagger),
+            "knife" => Ok(WeaponType::Knife),
+            "blade" => Ok(WeaponType::Blade),
+            "edge" => Ok(WeaponType::Edge),
+            "ripper" => Ok(WeaponType::Ripper),
+            "bladedance" => Ok(WeaponType::BladeDance),
+            "bloodyart" => Ok(WeaponType::BloodyArt),
+            "crossscar" => Ok(WeaponType::CrossScar),
+            "partisan" => Ok(WeaponType::Partisan),
+            "halbert" => Ok(WeaponType::Halbert),
+            "glaive" => Ok(WeaponType::Glaive),
+            "berdys" => Ok(WeaponType::Berdys),
+            "gungnir" => Ok(WeaponType::Gungnir),
+            "brionac" => Ok(WeaponType::Brionac),
+            "vjaya" => Ok(WeaponType::Vjaya),
+            "gaebolg" => Ok(WeaponType::GaeBolg),
+            "slicer" => Ok(WeaponType::Slicer),
+            "spinner" => Ok(WeaponType::Spinner),
+            "cutter" => Ok(WeaponType::Cutter),
+            "sawcer" => Ok(WeaponType::Sawcer),
+            "diska" => Ok(WeaponType::Diska),
+            "slicerofassassin" => Ok(WeaponType::SlicerofAssassin),
+            "diskaofliberator" => Ok(WeaponType::DiskaofLiberator),
+            "diskaofbraveman" => Ok(WeaponType::DiskaofBraveman),
+            "handgun" => Ok(WeaponType::Handgun),
+            "autogun" => Ok(WeaponType::Autogun),
+            "lockgun" => Ok(WeaponType::Lockgun),
+            "railgun" => Ok(WeaponType::Railgun),
+            "raygun" | "rg" => Ok(WeaponType::Raygun),
+            "varista" => Ok(WeaponType::Varista),
+            "customrayveroo" => Ok(WeaponType::CustomRayverOO),
+            "bravace" => Ok(WeaponType::Bravace),
+            "rifle" => Ok(WeaponType::Rifle),
+            "sniper" => Ok(WeaponType::Sniper),
+            "blaster" => Ok(WeaponType::Blaster),
+            "beam" => Ok(WeaponType::Beam),
+            "laser" => Ok(WeaponType::Laser),
+            "visk235w" => Ok(WeaponType::Visk235W),
+            "walsmk2" => Ok(WeaponType::WalsMK2),
+            "justy23st" => Ok(WeaponType::Justy23ST),
+            "mechgun" => Ok(WeaponType::Mechgun),
+            "assault" => Ok(WeaponType::Assault),
+            "repeater" => Ok(WeaponType::Repeater),
+            "gatling" => Ok(WeaponType::Gatling),
+            "vulcan" | "vulc" => Ok(WeaponType::Vulcan),
+            "ma60vise" => Ok(WeaponType::MA60Vise),
+            "hs25justice" => Ok(WeaponType::HS25Justice),
+            "lk14combat" => Ok(WeaponType::LK14Combat),
+            "shot" => Ok(WeaponType::Shot),
+            "spread" => Ok(WeaponType::Spread),
+            "cannon" => Ok(WeaponType::Cannon),
+            "launcher" => Ok(WeaponType::Launcher),
+            "arms" => Ok(WeaponType::Arms),
+            "crushbullet" => Ok(WeaponType::CrushBullet),
+            "meteorsmash" => Ok(WeaponType::MeteorSmash),
+            "finalimpact" => Ok(WeaponType::FinalImpact),
+            "cane" => Ok(WeaponType::Cane),
+            "stick" => Ok(WeaponType::Stick),
+            "mace" => Ok(WeaponType::Mace),
+            "club" => Ok(WeaponType::Club),
+            "cluboflaconium" => Ok(WeaponType::ClubofLaconium),
+            "maceofadaman" => Ok(WeaponType::MaceofAdaman),
+            "clubofzumiuran" => Ok(WeaponType::ClubofZumiuran),
+            "rod" => Ok(WeaponType::Rod),
+            "pole" => Ok(WeaponType::Pole),
+            "pillar" => Ok(WeaponType::Pillar),
+            "striker" => Ok(WeaponType::Striker),
+            "battleverge" => Ok(WeaponType::BattleVerge),
+            "bravehammer" => Ok(WeaponType::BraveHammer),
+            "aliveaqhu" => Ok(WeaponType::AliveAqhu),
+            "wand" => Ok(WeaponType::Wand),
+            "staff" => Ok(WeaponType::Staff),
+            "baton" => Ok(WeaponType::Baton),
+            "scepter" => Ok(WeaponType::Scepter),
+            "firescepteragni" | "agni" => Ok(WeaponType::FireScepterAgni),
+            "icestaffdagon" | "dagon" => Ok(WeaponType::IceStaffDagon),
+            "stormwandindra" | "indra" => Ok(WeaponType::StormWandIndra),
+            "photonclaw" => Ok(WeaponType::PhotonClaw),
+            "silenceclaw" => Ok(WeaponType::SilenceClaw),
+            "neisclaw1" => Ok(WeaponType::NeisClaw1),
+            "doublesaber" => Ok(WeaponType::DoubleSaber),
+            "stagcutlery" => Ok(WeaponType::StagCutlery),
+            "twinbrand" => Ok(WeaponType::TwinBrand),
+            "braveknuckle" => Ok(WeaponType::BraveKnuckle),
+            "angryfist" => Ok(WeaponType::AngryFist),
+            "godhand" => Ok(WeaponType::GodHand),
+            "orotiagito" => Ok(WeaponType::Orotiagito),
+            "agito1" => Ok(WeaponType::Agito1),
+            "agito2" => Ok(WeaponType::Agito2),
+            "agito3" => Ok(WeaponType::Agito3),
+            "agito4" => Ok(WeaponType::Agito4),
+            "agito5" => Ok(WeaponType::Agito5),
+            "agito6" => Ok(WeaponType::Agito6),
+            "raikiri" => Ok(WeaponType::Raikiri),
+            "souleater" => Ok(WeaponType::SoulEater),
+            "soulbanish" => Ok(WeaponType::SoulBanish),
+            "spreadneedle" | "sn" => Ok(WeaponType::SpreadNeedle),
+            "holyray" => Ok(WeaponType::HolyRay),
+            "infernobazooka" => Ok(WeaponType::InfernoBazooka),
+            "flamevisit" => Ok(WeaponType::FlameVisit),
+            "burningvisit" => Ok(WeaponType::BurningVisit),
+            "akikosfryingpan" => Ok(WeaponType::AkikosFryingPan),
+            "sorcererscane" => Ok(WeaponType::SorcerersCane),
+            "sbeatsblade" => Ok(WeaponType::SBeatsBlade),
+            "parmsblade" => Ok(WeaponType::PArmsBlade),
+            "delsabersbuster" => Ok(WeaponType::DelsabersBuster),
+            "bringersrifle" => Ok(WeaponType::BringersRifle),
+            "eggblaster" => Ok(WeaponType::EggBlaster),
+            "psychowand" | "pwand" => Ok(WeaponType::PsychoWand),
+            "heavenpunisher" => Ok(WeaponType::HeavenPunisher),
+            "laviscannon" => Ok(WeaponType::LavisCannon),
+            "victoraxe" => Ok(WeaponType::VictorAxe),
+            "laconiumaxe" => Ok(WeaponType::LaconiumAxe),
+            "chainsawd" => Ok(WeaponType::ChainSawd),
+            "caduceus" => Ok(WeaponType::Caduceus),
+            "stingtip" => Ok(WeaponType::StingTip),
+            "magicalpiece" => Ok(WeaponType::MagicalPiece),
+            "technicalcrozier" => Ok(WeaponType::TechnicalCrozier),
+            "suppressedgun" => Ok(WeaponType::SuppressedGun),
+            "ancientsaber" => Ok(WeaponType::AncientSaber),
+            "harisenbattlefan" => Ok(WeaponType::HarisenBattleFan),
+            "yamigarasu" => Ok(WeaponType::Yamigarasu),
+            "akikoswok" => Ok(WeaponType::AkikosWok),
+            "toyhammer" => Ok(WeaponType::ToyHammer),
+            "elysion" => Ok(WeaponType::Elysion),
+            "redsaber" => Ok(WeaponType::RedSaber),
+            "meteorcudgel" => Ok(WeaponType::MeteorCudgel),
+            "monkeykingbar" => Ok(WeaponType::MonkeyKingBar),
+            "blackkingbar" => Ok(WeaponType::BlackKingBar),
+            "doublecannon" => Ok(WeaponType::DoubleCannon),
+            "hugebattlefan" => Ok(WeaponType::HugeBattleFan),
+            "tsumikirijsword" | "tjs" => Ok(WeaponType::TsumikiriJSword),
+            "sealedjsword" | "sjs" => Ok(WeaponType::SealedJSword),
+            "redsword" => Ok(WeaponType::RedSword),
+            "crazytune" => Ok(WeaponType::CrazyTune),
+            "twinchakram" => Ok(WeaponType::TwinChakram),
+            "wokofakikosshop" => Ok(WeaponType::WokofAkikosShop),
+            "lavisblade" => Ok(WeaponType::LavisBlade),
+            "reddagger" => Ok(WeaponType::RedDagger),
+            "madamsparasol" => Ok(WeaponType::MadamsParasol),
+            "madamsumbrella" => Ok(WeaponType::MadamsUmbrella),
+            "imperialpick" => Ok(WeaponType::ImperialPick),
+            "berdysh" => Ok(WeaponType::Berdysh),
+            "redpartisan" => Ok(WeaponType::RedPartisan),
+            "flightcutter" => Ok(WeaponType::FlightCutter),
+            "flightfan" => Ok(WeaponType::FlightFan),
+            "redslicer" => Ok(WeaponType::RedSlicer),
+            "handgunguld" => Ok(WeaponType::HandgunGuld),
+            "handgunmilla" => Ok(WeaponType::HandgunMilla),
+            "redhandgun" => Ok(WeaponType::RedHandgun),
+            "frozenshooter" | "fs" => Ok(WeaponType::FrozenShooter),
+            "snowqueen" | "sq" => Ok(WeaponType::SnowQueen),
+            "antiandroidrifle" => Ok(WeaponType::AntiAndroidRifle),
+            "rocketpunch" => Ok(WeaponType::RocketPunch),
+            "sambamaracas" => Ok(WeaponType::SambaMaracas),
+            "twinpsychogun" => Ok(WeaponType::TwinPsychogun),
+            "drilllauncher" => Ok(WeaponType::DrillLauncher),
+            "guldmilla" => Ok(WeaponType::GuldMilla),
+            "redmechgun" => Ok(WeaponType::RedMechgun),
+            "belracannon" => Ok(WeaponType::BelraCannon),
+            "panzerfaust" => Ok(WeaponType::PanzerFaust),
+            "ironfaust" => Ok(WeaponType::IronFaust),
+            "summitmoon" => Ok(WeaponType::SummitMoon),
+            "windmill" => Ok(WeaponType::Windmill),
+            "evilcurst" => Ok(WeaponType::EvilCurst),
+            "flowercane" => Ok(WeaponType::FlowerCane),
+            "hildebearscane" => Ok(WeaponType::HildebearsCane),
+            "hildebluescane" => Ok(WeaponType::HildebluesCane),
+            "rabbitwand" => Ok(WeaponType::RabbitWand),
+            "plantainleaf" => Ok(WeaponType::PlantainLeaf),
+            "fatsia" => Ok(WeaponType::Fatsia),
+            "demonicfork" => Ok(WeaponType::DemonicFork),
+            "strikerofchao" => Ok(WeaponType::StrikerofChao),
+            "broom" => Ok(WeaponType::Broom),
+            "prophetsofmotav" => Ok(WeaponType::ProphetsofMotav),
+            "thesighofagod" => Ok(WeaponType::TheSighofaGod),
+            "twinklestar" => Ok(WeaponType::TwinkleStar),
+            "plantainfan" => Ok(WeaponType::PlantainFan),
+            "twinblaze" => Ok(WeaponType::TwinBlaze),
+            "marinasbag" => Ok(WeaponType::MarinasBag),
+            "dragonsclaw" => Ok(WeaponType::DragonsClaw),
+            "panthersclaw" => Ok(WeaponType::PanthersClaw),
+            "sredsblade" => Ok(WeaponType::SRedsBlade),
+            "plantainhugefan" => Ok(WeaponType::PlantainHugeFan),
+            "chameleonscythe" => Ok(WeaponType::ChameleonScythe),
+            "yasminkov3000r" => Ok(WeaponType::Yasminkov3000R),
+            "anorifle" => Ok(WeaponType::AnoRifle),
+            "baranzlauncher" => Ok(WeaponType::BaranzLauncher),
+            "branchofpakupaku" => Ok(WeaponType::BranchofPakupaku),
+            "heartofpoumn" => Ok(WeaponType::HeartofPoumn),
+            "yasminkov2000h" => Ok(WeaponType::Yasminkov2000H),
+            "yasminkov7000v" => Ok(WeaponType::Yasminkov7000V),
+            "yasminkov9000m" | "yas9k" => Ok(WeaponType::Yasminkov9000M),
+            "maserbeam" => Ok(WeaponType::MaserBeam),
+            "powermaser" => Ok(WeaponType::PowerMaser),
+            "gamemagazine" => Ok(WeaponType::GameMagazine),
+            "flowerbouquet" => Ok(WeaponType::FlowerBouquet),
+            "musashi" => Ok(WeaponType::Musashi),
+            "yamato" => Ok(WeaponType::Yamato),
+            "asuka" => Ok(WeaponType::Asuka),
+            "sangeyasha" => Ok(WeaponType::SangeYasha),
+            "sange" => Ok(WeaponType::Sange),
+            "yasha" => Ok(WeaponType::Yasha),
+            "photonlauncher" => Ok(WeaponType::PhotonLauncher),
+            "guiltylight" => Ok(WeaponType::GuiltyLight),
+            "redscorpio" => Ok(WeaponType::RedScorpio),
+            "talis" => Ok(WeaponType::Talis),
+            "mahu" => Ok(WeaponType::Mahu),
+            "hitogata" => Ok(WeaponType::Hitogata),
+            "dancinghitogata" => Ok(WeaponType::DancingHitogata),
+            "nug2000bazooka" => Ok(WeaponType::Nug2000Bazooka),
+            "sberillshands0" => Ok(WeaponType::SBerillsHands0),
+            "sberillshands1" => Ok(WeaponType::SBerillsHands1),
+            "flowenssword1" => Ok(WeaponType::FlowensSword1),
+            "flowenssword2" => Ok(WeaponType::FlowensSword2),
+            "flowenssword3" => Ok(WeaponType::FlowensSword3),
+            "flowenssword4" => Ok(WeaponType::FlowensSword4),
+            "flowenssword5" => Ok(WeaponType::FlowensSword5),
+            "flowenssword6" => Ok(WeaponType::FlowensSword6),
+            "flowenssword7" => Ok(WeaponType::FlowensSword7),
+            "flowenssword8" => Ok(WeaponType::FlowensSword8),
+            "flowenssword9" => Ok(WeaponType::FlowensSword9),
+            "dbssaber1" => Ok(WeaponType::DBsSaber1),
+            "dbssaber2" => Ok(WeaponType::DBsSaber2),
+            "dbssaber3" => Ok(WeaponType::DBsSaber3),
+            "dbssaber4" => Ok(WeaponType::DBsSaber4),
+            "dbssaber5" => Ok(WeaponType::DBsSaber5),
+            "dbssaber6" => Ok(WeaponType::DBsSaber6),
+            "dbssaber7" => Ok(WeaponType::DBsSaber7),
+            "dbssaber8" => Ok(WeaponType::DBsSaber8),
+            "dbssaber9" => Ok(WeaponType::DBsSaber9),
+            "giguebazooka" => Ok(WeaponType::GiGueBazooka),
+            "guardianna" => Ok(WeaponType::Guardianna),
+            "viridiacard" => Ok(WeaponType::ViridiaCard),
+            "greenillcard" => Ok(WeaponType::GreenillCard),
+            "skylycard" => Ok(WeaponType::SkylyCard),
+            "bluefullcard" => Ok(WeaponType::BluefullCard),
+            "purplenumcard" => Ok(WeaponType::PurplenumCard),
+            "pinkalcard" => Ok(WeaponType::PinkalCard),
+            "redriacard" => Ok(WeaponType::RedriaCard),
+            "orancard" => Ok(WeaponType::OranCard),
+            "yellowbozecard" => Ok(WeaponType::YellowbozeCard),
+            "whitillcard" => Ok(WeaponType::WhitillCard),
+            "morningglory" => Ok(WeaponType::MorningGlory),
+            "partisanoflightning" => Ok(WeaponType::PartisanofLightning),
+            "galwind" => Ok(WeaponType::GalWind),
+            "zanba" => Ok(WeaponType::Zanba),
+            "rikasclaw" => Ok(WeaponType::RikasClaw),
+            "angelharp" => Ok(WeaponType::AngelHarp),
+            "demolitioncomet" => Ok(WeaponType::DemolitionComet),
+            "neisclaw2" => Ok(WeaponType::NeisClaw2),
+            "rainbowbaton" => Ok(WeaponType::RainbowBaton),
+            "darkflow" | "df" => Ok(WeaponType::DarkFlow),
+            "darkmeteor" => Ok(WeaponType::DarkMeteor),
+            "darkbridge" => Ok(WeaponType::DarkBridge),
+            "gassassinssabers" => Ok(WeaponType::GAssassinsSabers),
+            "rappysfan" => Ok(WeaponType::RappysFan),
+            "boomasclaw" => Ok(WeaponType::BoomasClaw),
+            "goboomasclaw" => Ok(WeaponType::GoboomasClaw),
+            "gigoboomasclaw" => Ok(WeaponType::GigoboomasClaw),
+            "rubybullet" => Ok(WeaponType::RubyBullet),
+            "amorerose" => Ok(WeaponType::AmoreRose),
             _ => Err(ItemParseError::UnknownItem(String::from(value)))
         }
     }
@@ -842,6 +1125,10 @@ impl ItemData for Weapon {
         };
         row3
     }
+
+    fn row4(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Debug)]
@@ -907,6 +1194,10 @@ impl ItemData for Tech {
     fn row3(&self) -> u32 {
         0
     }
+
+    fn row4(&self) -> u32 {
+        0
+    }
 }
 
 
@@ -937,6 +1228,42 @@ pub struct Meseta {
     amount: u32,
 }
 
+#[derive(Debug)]
+pub struct RawItemData {
+    pub data: Vec<u8>,
+}
+
+impl RawItemData {
+    fn get_row(&self, row: usize) -> u32 {
+        let mut result = 0;
+        for i in 0..4 {
+            result |= match self.data.get(row*4 + i) {
+                Some(v) => (*v as u32) << (i*8),
+                None => 0,
+            };
+        }
+        result
+    }
+}
+
+impl ItemData for RawItemData {
+    fn row1(&self) -> u32 {
+        self.get_row(0)
+    }
+    
+    fn row2(&self) -> u32 {
+        self.get_row(1)
+    }
+
+    fn row3(&self) -> u32 {
+        self.get_row(2)
+    }
+
+    fn row4(&self) -> u32 {
+        self.get_row(3)
+    }
+}
+
 pub enum Item {
     Weapon(Weapon),
     //armor
@@ -945,4 +1272,5 @@ pub enum Item {
     //tech
     Mag(Mag),
     Meseta(Meseta),
+    RawItemData(RawItemData),
 }
