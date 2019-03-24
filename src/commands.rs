@@ -35,38 +35,11 @@ impl From<hex::FromHexError> for CommandError {
 
 #[derive(Debug)]
 pub struct MakeItem {
-    //item_hex: u32,
-    //item_row1: u32,
-    //item_row2: u32,
-    //item_row3: u32,
     item: Box<ItemData>,
 }
 
+// TODO: mag: "rawitem d0 c8 41 02 34 bc 01 f4 00 24 17 96 00 c8 07 10"
 impl MakeItem {
-    /*fn parse(item_cmd: Vec<&str>) -> MakeItem {
-        let item = None;
-
-        
-
-        if let Ok(weapontype) = WeaponType::try_from(item_cmd[1]) {
-            
-            MakeItem {
-                item: item
-            }
-        }
-        
-
-        
-        /*MakeItem {
-            //item_row1: 0x009D0000,
-            //item_row2: 0x00000364,
-            //item_row3: 0x04640564,
-            item_row1: 0x00009D00,
-            item_row2: 0x64030000,
-            item_row3: 0x64046405,
-        }*/
-    }*/
-
     fn parse_weapon(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
         let weapon = WeaponType::try_from(item_cmd[1])?;
 
@@ -112,6 +85,20 @@ impl MakeItem {
             })
         })
     }
+
+    fn parse_raw(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let mut data = Vec::new();
+        for value in item_cmd.iter().skip(1) {
+            //println!("{:?}: {:?}", data, value);
+            data.extend(hex::decode(value)?);
+        }
+
+        Ok(MakeItem {
+            item: Box::new(RawItemData {
+                data: data,
+            })
+        })
+    }
     
     fn as_packet(&self, gamestate: &mut GameState) -> TargettedPacket {
         gamestate.itemdrop_id += 0x10000;
@@ -126,8 +113,8 @@ impl MakeItem {
                 item_row2: self.item.row2(),
                 item_row3: self.item.row3(),
                 itemdrop_id: gamestate.itemdrop_id,
-                unknown2: 0,
-                unknown3: 2,
+                item_row4: self.item.row4(),
+                unknown: 2,
             })}))
     }
 }
@@ -182,7 +169,16 @@ impl Command {
         match split[0] {
             "weapon" => Ok(Command::MakeItem(MakeItem::parse_weapon(split)?)),
             "tech" => Ok(Command::MakeItem(MakeItem::parse_tech(split)?)),
+            //"armor" => Ok(Command::MakeItem(MakeItem::parse_armor(split)?)),
+            //"shield" => Ok(Command::MakeItem(MakeItem::parse_shield(split)?)),
+            //"unit" => Ok(Command::MakeItem(MakeItem::parse_unit(split)?)),
+            //"mag" => Ok(Command::MakeItem(MakeItem::parse_mag(split)?)),
+            //"tool" => Ok(Command::MakeItem(MakeItem::parse_tool(split)?)),
+            //"meseta" => Ok(Command::MakeItem(MakeItem::parse_meseta(split)?)),
+            "rawitem" => Ok(Command::MakeItem(MakeItem::parse_raw(split)?)),
             "raw" => Ok(Command::RawPacket(RawPacket::parse(split)?)),
+            "itemcirclestart" => Ok(Command::ItemCircleStart),
+            "itemcircleend" => Ok(Command::ItemCircleEnd),
             _ => Err(CommandError::UnknownCommand(data))
         }
     }
