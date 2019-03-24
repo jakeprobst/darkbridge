@@ -172,7 +172,6 @@ impl Proxy {
         pkts
     }
 
-    // TODO: split! why did I think it was a good idea to have a function with and in the name?
     fn send_packets(&mut self, pkts: Vec<TargettedPacket>) {
         for pkt in pkts {
             match pkt {
@@ -256,9 +255,12 @@ impl Proxy {
                         let cmdbuf = BufReader::new(&mut cmd_pipe);
                         for cmd in cmdbuf.lines() {
                             let command = Command::parse(cmd.unwrap().to_ascii_lowercase());
-                            if let Ok(c) = command {
-                                let pkts = commandrunner.run(c, self);
-                                self.send_packets(pkts);
+                            match command {
+                                Ok(c) => {
+                                    let pkts = commandrunner.run(c, self);
+                                    self.send_packets(pkts);
+                                },
+                                Err(err) => println!("!!! command error: {:?}", err),
                             }
                         }
                     }
