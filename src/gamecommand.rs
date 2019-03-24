@@ -217,8 +217,8 @@ pub struct ItemDrop {
     pub item_row2: u32,
     pub item_row3: u32,
     pub itemdrop_id: u32,
-    pub unknown2: u32,
-    pub unknown3: u32,
+    pub item_row4: u32,
+    pub unknown: u32,
 }
 
 impl /*GameCommandData for*/ ItemDrop {
@@ -245,8 +245,8 @@ impl /*GameCommandData for*/ ItemDrop {
             ._u32_be(self.item_row2)
             ._u32_be(self.item_row3)
             ._u32(self.itemdrop_id)
-            ._u32(self.unknown2)
-            ._u32(self.unknown3)
+            ._u32_be(self.item_row4)
+            ._u32(self.unknown)
             .build()
         // TODO: self.size is based on 32 bit items, `assert len(self.data) % 4 == 0`?
         /*let mut buf: Vec<u8> = Vec::new();
