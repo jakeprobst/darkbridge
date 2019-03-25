@@ -38,10 +38,9 @@ pub struct MakeItem {
     item: Box<ItemData>,
 }
 
-// TODO: mag: "rawitem d0 c8 41 02 34 bc 01 f4 00 24 17 96 00 c8 07 10"
 impl MakeItem {
     fn parse_weapon(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
-        let weapon = WeaponType::try_from(item_cmd[1])?;
+        let weapon = WeaponType::try_from(*item_cmd.get(1).ok_or(ItemParseError::MissingParameter)?)?;
 
         let mut special = None;
         let mut grind = 0;
@@ -77,7 +76,7 @@ impl MakeItem {
     fn parse_tech(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
         let tech = TechType::try_from(item_cmd[1])?;
         let level = item_cmd[2].parse::<u8>()?;
-        
+
         Ok(MakeItem {
             item: Box::new(Tech {
                 tech: tech,
@@ -86,10 +85,58 @@ impl MakeItem {
         })
     }
 
+    fn parse_tool(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let tool = ToolType::try_from(item_cmd[1])?;
+        let stack = match item_cmd.get(2) {
+            Some(s) => s.parse::<u8>()?,
+            None => 0
+        };
+
+        Ok(MakeItem {
+            item: Box::new(Tool {
+                tool: tool,
+                stack: stack,
+            })
+        })
+    }
+
+    fn parse_mag(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let mag = MagType::try_from(*item_cmd.get(1).ok_or(ItemParseError::MissingParameter)?)?;
+
+        let stats = item_cmd.get(2).ok_or(ItemParseError::MissingParameter)?.split("/").collect::<Vec<_>>();
+        let def = stats.get(0).ok_or(ItemParseError::MissingParameter)?.parse::<u16>()?;
+        let pow = stats.get(1).ok_or(ItemParseError::MissingParameter)?.parse::<u16>()?;
+        let dex = stats.get(2).ok_or(ItemParseError::MissingParameter)?.parse::<u16>()?;
+        let mnd = stats.get(3).ok_or(ItemParseError::MissingParameter)?.parse::<u16>()?;
+
+        let mut pb_idx = 0;
+        let mut pbs: [Option<PhotonBlast>; 3] = [None, None, None];
+        for pb_cmd in item_cmd.iter().skip(3) {
+            if let Ok(pb) = PhotonBlast::try_from(*pb_cmd) {
+                pbs[pb_idx] = Some(pb);
+                pb_idx += 1;
+            }
+        }
+
+        Ok(MakeItem {
+            item: Box::new(Mag {
+                mag: mag,
+                iq: 200,
+                sync: 120,
+                def: def,
+                pow: pow,
+                dex: dex,
+                mnd: mnd,
+                pbs: pbs,
+                color: MagColor::Null,
+            })
+        })
+
+    }
+
     fn parse_raw(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
         let mut data = Vec::new();
         for value in item_cmd.iter().skip(1) {
-            //println!("{:?}: {:?}", data, value);
             data.extend(hex::decode(value)?);
         }
 
@@ -99,12 +146,13 @@ impl MakeItem {
             })
         })
     }
-    
-    fn as_packet(&self, gamestate: &mut GameState) -> TargettedPacket {
+
+    fn as_packet(&self, gamestate: &mut GameState) -> Packet {
         gamestate.itemdrop_id += 0x10000;
-        TargettedPacket::Client(Packet::GameCommand(GameCommand {
+        Packet::GameCommand(GameCommand {
             flag: 0,
             client: 0,
+            unknown: 0,
             cmd: GameCommandAction::ItemDrop(ItemDrop {
                 floor: gamestate.floor,
                 x: gamestate.position.x,
@@ -115,7 +163,7 @@ impl MakeItem {
                 itemdrop_id: gamestate.itemdrop_id,
                 item_row4: self.item.row4(),
                 unknown: 2,
-            })}))
+            })})
     }
 }
 
@@ -135,8 +183,8 @@ impl RawPacket {
         }
 
         let raw = RawData::parse(pkt_cmd[0], flag[0], &data);
-            
-        
+
+
         // TODO: proper index error checking
         Ok(RawPacket {
             pkt: match cmd[1] {
@@ -172,8 +220,8 @@ impl Command {
             //"armor" => Ok(Command::MakeItem(MakeItem::parse_armor(split)?)),
             //"shield" => Ok(Command::MakeItem(MakeItem::parse_shield(split)?)),
             //"unit" => Ok(Command::MakeItem(MakeItem::parse_unit(split)?)),
-            //"mag" => Ok(Command::MakeItem(MakeItem::parse_mag(split)?)),
-            //"tool" => Ok(Command::MakeItem(MakeItem::parse_tool(split)?)),
+            "mag" => Ok(Command::MakeItem(MakeItem::parse_mag(split)?)),
+            "tool" => Ok(Command::MakeItem(MakeItem::parse_tool(split)?)),
             //"meseta" => Ok(Command::MakeItem(MakeItem::parse_meseta(split)?)),
             "rawitem" => Ok(Command::MakeItem(MakeItem::parse_raw(split)?)),
             "raw" => Ok(Command::RawPacket(RawPacket::parse(split)?)),
@@ -200,7 +248,7 @@ impl CommandRunner {
             item_circle: None,
         }
     }
-    
+
     pub fn run(&mut self, cmd: Command, proxy: &mut Proxy) -> Vec<TargettedPacket> {
         let mut result = Vec::new();
         match cmd {
@@ -212,7 +260,9 @@ impl CommandRunner {
                 self.item_circle = None
             }
             Command::MakeItem(makeitem) => {
-                result.push(makeitem.as_packet(&mut proxy.gamestate));
+                let pkt = makeitem.as_packet(&mut proxy.gamestate);
+                result.push(TargettedPacket::Client(pkt.clone()));
+                result.push(TargettedPacket::Server(pkt));
             },
             Command::RawPacket(raw) => {
                 result.push(raw.as_packet());
@@ -230,7 +280,7 @@ impl CommandRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn weapon() {
         let cmd = Command::parse("weapon df +9 100n 100a 100h".to_string());
@@ -246,7 +296,7 @@ mod tests {
             println!("{:08X}", makeitem.item.row3());
             dbg!(makeitem.as_packet(&mut gs));
         };
-        
+
         let cmd = Command::parse("weapon notreal 100n 100a 100h".to_string());
         println!("{:?}", cmd);
 
@@ -260,6 +310,26 @@ mod tests {
     fn raw() {
         let cmd = Command::parse("raw client 01 05 0A FF 7F".to_string());
         let mut gs = GameState::new();
+    }
+
+    #[test]
+    fn mags() {
+        let cmd = Command::parse("mag sato 5/145/50/0 leilla pilla twins".to_string());
+        dbg!(&cmd);
+
+        let mut gs = GameState::new();
+        gs.floor = 1;
+        gs.position.x = 5.0;
+        gs.position.z = 7.0;
+
+        if let Ok(Command::MakeItem(ref makeitem)) = cmd {
+            dbg!(&makeitem.item);
+            println!("{:08X}", makeitem.item.row1());
+            println!("{:08X}", makeitem.item.row2());
+            println!("{:08X}", makeitem.item.row3());
+            println!("{:08X}", makeitem.item.row4());
+            dbg!(makeitem.as_packet(&mut gs));
+        };
     }
 }
 
