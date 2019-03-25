@@ -274,6 +274,7 @@ pub enum GameCommandAction {
 pub struct GameCommand {
     pub flag: u8,
     pub client: u8,
+    pub unknown: u8,
     pub cmd: GameCommandAction,
 }
 
@@ -283,14 +284,15 @@ impl PacketData for GameCommand {
         let gcmd = cur.read_u8().unwrap();
         let _size = cur.read_u8().unwrap();
         let client = cur.read_u8().unwrap();
+        let unknown = cur.read_u8().unwrap();
 
-        cur.set_position(0x04);
         let mut cmd_data = Vec::new();
         cur.read_to_end(&mut cmd_data).unwrap();
 
         GameCommand {
             flag: flag,
             client: client,
+            unknown: unknown,
             cmd: match gcmd {
                 0x1F => GameCommandAction::PlayerArea(PlayerArea::parse(gcmd, &cmd_data)),
                 0x3E => GameCommandAction::PlayerStop(PlayerStop::parse(gcmd, &cmd_data)),
@@ -312,6 +314,7 @@ impl PacketData for GameCommand {
         };
 
         data[0x02] = self.client;
+        data[0x03] = self.unknown;
 
         let mut buf: Vec<u8> = Vec::new();
         buf.write_u8(0x60).unwrap();
