@@ -222,7 +222,6 @@ impl Proxy {
                         println!("[GAMECUBE]");
                         while let Some(pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
                             println!("gc! {:?}", pkt);
-                            //self.filter_and_send(&filters, TargettedPacket::Server(pkt));
                             let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Server(pkt));
                             self.send_packets(filtered_pkts);
                         }
