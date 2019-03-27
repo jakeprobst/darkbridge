@@ -2345,6 +2345,8 @@ pub enum MagType {
     Pushan,
     Diwari,
     Sato,
+    Bhima,
+    Nidra,
 }
 
 impl TryFrom<&str> for MagType {
@@ -2415,6 +2417,8 @@ impl TryFrom<&str> for MagType {
             "pushan" => Ok(MagType::Pushan),
             "diwari" => Ok(MagType::Diwari),
             "sato" => Ok(MagType::Sato),
+            "bhima" => Ok(MagType::Bhima),
+            "nidra" => Ok(MagType::Nidra),
             _ => Err(ItemParseError::UnknownItem(String::from(value)))
         }
     }
@@ -2487,6 +2491,8 @@ impl MagType {
             MagType::Pushan => 0x023D00,
             MagType::Diwari => 0x023E00,
             MagType::Sato => 0x023F00,
+            MagType::Bhima => 0x240000,
+            MagType::Nidra => 0x241000,
         }
     }
 }
