@@ -142,7 +142,7 @@ impl GameCommandData for PlayerRun {
 
     fn as_bytes(&self) -> Vec<u8> {
         GameCommandBytes::new()
-            .cmd(0x40)
+            .cmd(0x42)
             ._f32(self.x)
             ._f32(self.z)
             .build()
