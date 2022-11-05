@@ -1133,13 +1133,164 @@ impl ItemData for Weapon {
 
 #[derive(Debug)]
 pub enum ESWeaponType {
+    Saber = 0,
+    Sword,
+    Blade,
+    Partisan,
+    Slicer,
+    Gun,
+    Rifle,
+    Mechgun,
+    Shot,
+    Cane,
+    Rod,
+    Wand,
+    Twin,
+    Claw,
+    Bazooka,
+    Needle,
+    Scythe,
+    Hammer,
+    Moon,
+    Psychogun,
+    Punch,
+    Windmill,
+    Harisen,
+    Katana,
+    JCutter,
+    Swords = 0x35,
+    Launcher,
+    Cards,
+    Knuckle,
+    Axe,
 }
 
-struct ESWeapon {
-    weapon: ESWeaponType,
-    name: String,
+impl TryFrom<&str> for ESWeaponType {
+    type Error = ItemParseError;
+    fn try_from(special: &str) -> Result<ESWeaponType, ItemParseError> {
+        match special {
+            "saber" => Ok(ESWeaponType::Saber),
+            "sword" => Ok(ESWeaponType::Sword),
+            "blade" => Ok(ESWeaponType::Blade),
+            "partisan" => Ok(ESWeaponType::Partisan),
+            "slicer" => Ok(ESWeaponType::Slicer),
+            "gun" => Ok(ESWeaponType::Gun),
+            "rifle" => Ok(ESWeaponType::Rifle),
+            "mechgun" => Ok(ESWeaponType::Mechgun),
+            "shot" => Ok(ESWeaponType::Shot),
+            "cane" => Ok(ESWeaponType::Cane),
+            "rod" => Ok(ESWeaponType::Rod),
+            "wand" => Ok(ESWeaponType::Wand),
+            "twin" => Ok(ESWeaponType::Twin),
+            "claw" => Ok(ESWeaponType::Claw),
+            "bazooka" => Ok(ESWeaponType::Bazooka),
+            "needle" => Ok(ESWeaponType::Needle),
+            "scythe" => Ok(ESWeaponType::Scythe),
+            "hammer" => Ok(ESWeaponType::Hammer),
+            "moon" => Ok(ESWeaponType::Moon),
+            "psychogun" => Ok(ESWeaponType::Psychogun),
+            "punch" => Ok(ESWeaponType::Punch),
+            "windmill" => Ok(ESWeaponType::Windmill),
+            "harisen" => Ok(ESWeaponType::Harisen),
+            "katana" => Ok(ESWeaponType::Katana),
+            "jcutter" => Ok(ESWeaponType::JCutter),
+            "swords" => Ok(ESWeaponType::Swords),
+            "launcher" => Ok(ESWeaponType::Launcher),
+            "cards" => Ok(ESWeaponType::Cards),
+            "knuckle" => Ok(ESWeaponType::Knuckle),
+            "axe" => Ok(ESWeaponType::Axe),
+            _ => Err(ItemParseError::UnknownSpecial(String::from(special)))
+        }
+    }
 }
 
+
+#[derive(Debug)]
+pub enum ESWeaponSpecial {
+    Jellen = 1,
+    Zalure,
+    HPRegen,
+    TPRegen,
+    Burning,
+    Tempest,
+    Blizzard,
+    Arrest,
+    Chaos,
+    Hell,
+    Spirit,
+    Berserk,
+    Demons,
+    Gush,
+    Geist,
+    Kings,
+}
+
+impl TryFrom<&str> for ESWeaponSpecial {
+    type Error = ItemParseError;
+    fn try_from(special: &str) -> Result<ESWeaponSpecial, ItemParseError> {
+        match special {
+            "jellen" => Ok(ESWeaponSpecial::Jellen),
+            "zalure" => Ok(ESWeaponSpecial::Zalure),
+            "hpregen" => Ok(ESWeaponSpecial::HPRegen),
+            "tpregen" => Ok(ESWeaponSpecial::TPRegen),
+            "burning" => Ok(ESWeaponSpecial::Burning),
+            "tempest" => Ok(ESWeaponSpecial::Tempest),
+            "blizzard" => Ok(ESWeaponSpecial::Blizzard),
+            "arrest" => Ok(ESWeaponSpecial::Arrest),
+            "chaos" => Ok(ESWeaponSpecial::Chaos),
+            "hell" => Ok(ESWeaponSpecial::Hell),
+            "spirit" => Ok(ESWeaponSpecial::Spirit),
+            "berserk" => Ok(ESWeaponSpecial::Berserk),
+            "demons" => Ok(ESWeaponSpecial::Demons),
+            "gush" => Ok(ESWeaponSpecial::Gush),
+            "geist" => Ok(ESWeaponSpecial::Geist),
+            "kings" => Ok(ESWeaponSpecial::Kings),
+            _ => Err(ItemParseError::UnknownSpecial(String::from(special)))
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct ESWeapon {
+    pub weapon: ESWeaponType,
+    pub special: Option<ESWeaponSpecial>,
+    pub name: [u8; 8],
+    pub grind: u8,
+}
+
+impl ItemData for ESWeapon {
+    fn row1(&self) -> u32 {
+        let special = match &self.special {
+            Some(special) => *special as u8,
+            None => 0,
+        };
+        u32::from_be_bytes([0, 0x70 + self.weapon as u8, special, self.grind])
+    }
+
+    fn row2(&self) -> u32 {
+        let name1: u16 = 0x8000 + (0x20 * (self.name[0] as u16 & 0x3F)) + (self.name[1] as u16 & 0x3F) ;
+        let bytes = name1.to_be_bytes();
+        u32::from_be_bytes([0, 0, bytes[0], bytes[1]])
+    }
+
+    fn row3(&self) -> u32 {
+        let name2: u16 = 0x8000 + (0x400 * (self.name[2] as u16 & 0x3F)) + (0x20 * (self.name[3] as u16 & 0x3F)) + (self.name[4] as u16 & 0x3F) ;
+        let name3: u16 = 0x8000 + (0x400 * (self.name[5] as u16 & 0x3F)) + (0x20 * (self.name[6] as u16 & 0x3F)) + (self.name[7] as u16 & 0x3F) ;
+
+        let bytes2 = name2.to_be_bytes();
+        let bytes3 = name3.to_be_bytes();
+        u32::from_be_bytes([bytes2[0], bytes2[1], bytes3[0], bytes3[1]])
+
+    }
+
+    fn row4(&self) -> u32 {
+        0
+    }
+}
+
+
+#[derive(Debug)]
 pub enum ArmorType {
     Frame,
     Armor,
@@ -1318,13 +1469,33 @@ impl ArmorType {
     }
 }
 
+#[derive(Debug)]
 pub struct Armor {
-    armor: ArmorType,
-    dfp: u8,
-    evp: u8,
-    slots: u8,
+    pub armor: ArmorType,
+    pub dfp: u8,
+    pub evp: u8,
+    pub slots: u8,
 }
 
+impl ItemData for Armor {
+    fn row1(&self) -> u32 {
+        self.armor.as_value() << 8
+    }
+
+    fn row2(&self) -> u32 {
+        u32::from_be_bytes([0, self.slots, self.dfp, 0])
+    }
+
+    fn row3(&self) -> u32 {
+        u32::from_be_bytes([self.evp, 0, 0, 0])
+    }
+
+    fn row4(&self) -> u32 {
+        0
+    }
+}
+
+#[derive(Debug)]
 pub enum ShieldType {
     Barrier,
     Shield,
@@ -1567,12 +1738,32 @@ impl ShieldType {
     }
 }
 
+#[derive(Debug)]
 pub struct Shield {
-    shield: ShieldType,
-    dfp: u8,
-    evp: u8,
+    pub shield: ShieldType,
+    pub dfp: u8,
+    pub evp: u8,
 }
 
+impl ItemData for Shield {
+    fn row1(&self) -> u32 {
+        self.shield.as_value() << 8
+    }
+
+    fn row2(&self) -> u32 {
+        u32::from_be_bytes([0, 0, self.dfp, 0])
+    }
+
+    fn row3(&self) -> u32 {
+        u32::from_be_bytes([self.evp, 0, 0, 0])
+    }
+
+    fn row4(&self) -> u32 {
+        0
+    }
+}
+
+#[derive(Debug)]
 pub enum UnitType {
     KnightPower,
     GeneralPower,
@@ -1730,7 +1921,7 @@ impl TryFrom<&str> for UnitType {
 }
 
 impl UnitType {
-    fn as_bytes(&self) -> u32 {
+    fn as_value(&self) -> u32 {
         match self {
             UnitType::KnightPower => 0x010300,
             UnitType::GeneralPower => 0x010301,
@@ -1810,6 +2001,7 @@ impl UnitType {
 
 
 
+#[derive(Debug)]
 pub enum UnitModifier {
     PlusPlus,
     Plus,
@@ -1817,9 +2009,47 @@ pub enum UnitModifier {
     MinusMinus,
 }
 
+#[derive(Debug)]
 pub struct Unit {
-    unit: UnitType,
-    umod: Option<UnitModifier>,
+    pub unit: UnitType,
+    pub umod: Option<UnitModifier>,
+}
+
+impl ItemData for Unit {
+    fn row1(&self) -> u32 {
+        self.unit.as_value() << 8
+    }
+
+    fn row2(&self) -> u32 {
+        u32::from_be_bytes(
+            [0,0,
+             self.umod.as_ref().map(|umod| {
+                 match umod {
+                     UnitModifier::PlusPlus => 3,
+                     UnitModifier::Plus => 1,
+                     UnitModifier::Minus => 0xFF,
+                     UnitModifier::MinusMinus => 0xFE,
+                 }
+             }).unwrap_or(0),
+             self.umod.as_ref().map(|umod| {
+                 match umod {
+                     UnitModifier::PlusPlus => 0,
+                     UnitModifier::Plus => 0,
+                     UnitModifier::Minus => 0xFF,
+                     UnitModifier::MinusMinus => 0xFF,
+                 }
+             }).unwrap_or(0)
+            ]
+        )
+    }
+
+    fn row3(&self) -> u32 {
+        0
+    }
+
+    fn row4(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Debug)]
@@ -2162,7 +2392,7 @@ pub struct Tool {
 
 impl ItemData for Tool {
     fn row1(&self) -> u32 {
-        (self.tool.as_value() << 8)
+        self.tool.as_value() << 8
     }
 
     fn row2(&self) -> u32 {
@@ -2621,9 +2851,30 @@ impl ItemData for Mag {
     }
 }
 
+#[derive(Debug)]
 pub struct Meseta {
-    amount: u32,
+    pub amount: u32,
 }
+
+impl ItemData for Meseta {
+    fn row1(&self) -> u32 {
+        u32::from_be_bytes([4, 0, 0, 0])
+    }
+
+    fn row2(&self) -> u32 {
+        0
+    }
+
+    fn row3(&self) -> u32 {
+        0
+    }
+
+    fn row4(&self) -> u32 {
+        u32::from_be_bytes(self.amount.to_le_bytes())
+    }
+}
+
+
 
 #[derive(Debug)]
 pub struct RawItemData {
@@ -2635,7 +2886,7 @@ impl RawItemData {
         let mut result = 0;
         for i in 0..4 {
             result |= match self.data.get(row*4 + i) {
-                Some(v) => (*v as u32) << (i*8),
+                Some(v) => (*v as u32) << ((3-i)*8),
                 None => 0,
             };
         }

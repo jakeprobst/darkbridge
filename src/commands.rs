@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+use std::convert::TryFrom;
 
 use crate::filters::TargettedPacket;
 use crate::proxy::Proxy;
@@ -6,10 +6,6 @@ use crate::proxy::GameState;
 use crate::packet::{Packet, RawData, PacketData};
 use crate::gamecommand::{GameCommand, GameCommandAction, ItemDrop};
 use crate::items::*;
-
-
-
-use std::convert::TryFrom;
 
 
 #[derive(Debug)]
@@ -35,7 +31,7 @@ impl From<hex::FromHexError> for CommandError {
 
 #[derive(Debug)]
 pub struct MakeItem {
-    item: Box<ItemData>,
+    item: Box<dyn ItemData>,
 }
 
 impl MakeItem {
@@ -73,9 +69,122 @@ impl MakeItem {
             })})
     }
 
+    fn parse_esweapon(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let weapon = ESWeaponType::try_from(*item_cmd.get(1).ok_or(ItemParseError::MissingParameter)?)?;
+        let (special, name, grind) = item_cmd.iter().skip(2)
+            .fold((None, None, None), |(mut special, mut name, mut grind), cmd| {
+                if special.is_none() {
+                    if let Ok(spec) = ESWeaponSpecial::try_from(*cmd) {
+                        special = Some(spec);
+                        return (special, name, grind);
+                    }
+                }
+
+                if grind.is_none() {
+                    if let Ok(gr) = cmd.parse::<u8>() {
+                        grind = Some(gr);
+                        return (special, name, grind);
+                    }
+                }
+
+                if name.is_none() {
+                    let mut out = [0u8; 8];
+                    for (i, k) in cmd.to_ascii_uppercase().as_bytes().into_iter().enumerate().take(8) {
+                        out[i] = *k;
+                    }
+
+                    name = Some(out);
+                    return (special, name, grind);
+                }
+
+                (special, name, grind)
+            });
+
+        Ok(MakeItem {
+            item: Box::new(ESWeapon {
+                weapon,
+                special,
+                grind: grind.unwrap_or(0),
+                name: name.unwrap_or([0; 8]),
+            })})
+    }
+
+    fn parse_armor(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let armor = ArmorType::try_from(item_cmd[1])?;
+
+        let (dfp, evp, slots) = item_cmd.iter().skip(2)
+            .try_fold((0, 0, 0), |(mut dfp, mut evp, mut slots), cmd| {
+                if cmd.ends_with("d") {
+                    dfp = cmd[..cmd.len()-1].parse::<u8>()?;
+                }
+                if cmd.ends_with("e") {
+                    evp = cmd[..cmd.len()-1].parse::<u8>()?;
+                }
+                if cmd.ends_with("s") {
+                    slots = cmd[..cmd.len()-1].parse::<u8>()?;
+                }
+                Ok::<_, ItemParseError>((dfp, evp, slots))
+            })?;
+
+        Ok(MakeItem {
+            item: Box::new(Armor {
+                armor,
+                dfp,
+                evp,
+                slots
+            })
+        })
+    }
+
+    fn parse_shield(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let shield = ShieldType::try_from(item_cmd[1])?;
+        let (dfp, evp) = item_cmd.iter().skip(2)
+            .try_fold((0, 0), |(mut dfp, mut evp), cmd| {
+                if cmd.ends_with("d") {
+                    dfp = cmd[..cmd.len()-1].parse::<u8>()?;
+                }
+                if cmd.ends_with("e") {
+                    evp = cmd[..cmd.len()-1].parse::<u8>()?;
+                }
+                Ok::<_, ItemParseError>((dfp, evp))
+            })?;
+
+        Ok(MakeItem {
+            item: Box::new(Shield {
+                shield,
+                dfp,
+                evp,
+            })
+        })
+    }
+
+    fn parse_unit(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let unit = UnitType::try_from(item_cmd[1])?;
+
+        let umod = item_cmd.get(2).and_then(|cmd| {
+            match *cmd {
+                "++" => Some(UnitModifier::PlusPlus),
+                "+" => Some(UnitModifier::Plus),
+                "-" => Some(UnitModifier::Minus),
+                "--" => Some(UnitModifier::MinusMinus),
+                _ => None,
+            }
+        });
+
+        Ok(MakeItem {
+            item: Box::new(Unit {
+                unit,
+                umod,
+            })
+        })
+    }
+
+
     fn parse_tech(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
         let tech = TechType::try_from(item_cmd[1])?;
-        let level = item_cmd[2].parse::<u8>()?;
+        let level = item_cmd.get(2).and_then(|cmd| {
+            cmd.parse::<u8>().ok()
+        }).unwrap_or(1) - 1;
 
         Ok(MakeItem {
             item: Box::new(Tech {
@@ -131,7 +240,16 @@ impl MakeItem {
                 color: MagColor::Null,
             })
         })
+    }
 
+    fn parse_meseta(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
+        let amount = item_cmd[1].parse::<u32>()?;
+
+        Ok(MakeItem {
+            item: Box::new(Meseta {
+                amount
+            })
+        })
     }
 
     fn parse_raw(item_cmd: Vec<&str>) -> Result<MakeItem, ItemParseError> {
@@ -216,13 +334,14 @@ impl Command {
 
         match split[0] {
             "weapon" => Ok(Command::MakeItem(MakeItem::parse_weapon(split)?)),
+            "esweapon" => Ok(Command::MakeItem(MakeItem::parse_esweapon(split)?)),
             "tech" => Ok(Command::MakeItem(MakeItem::parse_tech(split)?)),
-            //"armor" => Ok(Command::MakeItem(MakeItem::parse_armor(split)?)),
-            //"shield" => Ok(Command::MakeItem(MakeItem::parse_shield(split)?)),
-            //"unit" => Ok(Command::MakeItem(MakeItem::parse_unit(split)?)),
+            "armor" => Ok(Command::MakeItem(MakeItem::parse_armor(split)?)),
+            "shield" => Ok(Command::MakeItem(MakeItem::parse_shield(split)?)),
+            "unit" => Ok(Command::MakeItem(MakeItem::parse_unit(split)?)),
             "mag" => Ok(Command::MakeItem(MakeItem::parse_mag(split)?)),
             "tool" => Ok(Command::MakeItem(MakeItem::parse_tool(split)?)),
-            //"meseta" => Ok(Command::MakeItem(MakeItem::parse_meseta(split)?)),
+            "meseta" => Ok(Command::MakeItem(MakeItem::parse_meseta(split)?)),
             "rawitem" => Ok(Command::MakeItem(MakeItem::parse_raw(split)?)),
             "raw" => Ok(Command::RawPacket(RawPacket::parse(split)?)),
             "itemcirclestart" => Ok(Command::ItemCircleStart),
