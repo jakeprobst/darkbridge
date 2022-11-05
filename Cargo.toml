@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 "byteorder" = "1"
-"mio" = "0.6"
+"mio" = { version = "0.8", features = ["os-poll", "net", "os-ext"] }
 "nix" = "0.13.0"
 "libc" = "*"
 "regex" = "1"

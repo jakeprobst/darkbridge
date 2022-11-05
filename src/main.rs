@@ -12,6 +12,7 @@ use std::net::TcpListener;
 use std::net::{SocketAddr, Ipv4Addr};
 //use mio::*;
 //use mio::tcp::TcpListener;
+use mio::net::TcpStream;
 
 const PSOPORT: u16 = 9100;
 

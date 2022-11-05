@@ -4,9 +4,10 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::{RawFd, AsRawFd};
 use std::net;
 use std::net::{SocketAddr, Ipv4Addr};
+use mio::Poll;
 use mio::*;
-use mio::tcp::{TcpStream, TcpListener};
-use mio::unix::EventedFd;
+use mio::net::{TcpStream, TcpListener};
+use mio::unix::SourceFd;
 use std::io::{Read, Write, Cursor, BufReader, BufRead};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use nix::unistd;
@@ -19,6 +20,14 @@ use crate::cipher::Cipher;
 use crate::commands::{Command, CommandRunner};
 
 const PSOPORT: u16 = 9100;
+
+// unseen
+//const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(47, 87, 165, 199);
+// scht
+const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(149, 56, 167, 128);
+// elsewhere
+//const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(45, 33, 31, 247);
+
 
 pub const GAMECUBE: Token = Token(0);
 pub const SERVER: Token = Token(1);
@@ -81,8 +90,10 @@ fn get_packet(mut sock: &TcpStream, cipher: &mut Option<Cipher>) -> Option<Packe
     let mut local_cipher = cipher.clone();
 
     let mut header = vec![0u8; 4];
-    if let Err(_e) = sock.peek(&mut header) {
-        return None;
+    match sock.peek(&mut header) {
+        Ok(len) if len != 4 => return None,
+        Err(_) => return None,
+        _ => {}
     }
 
     if let Some(ref mut cipher) = local_cipher {
@@ -93,6 +104,10 @@ fn get_packet(mut sock: &TcpStream, cipher: &mut Option<Cipher>) -> Option<Packe
     let cmd = cur.read_u8().unwrap();
     let flag = cur.read_u8().unwrap();
     let len = cur.read_u16::<LittleEndian>().unwrap();
+
+    if len == 0 {
+        return None
+    }
 
     let mut peek_buf = vec![0u8; len as usize];
     let peek_len = match sock.peek(&mut peek_buf) {
@@ -121,33 +136,36 @@ fn get_packet(mut sock: &TcpStream, cipher: &mut Option<Cipher>) -> Option<Packe
     Some(pkt)
 }
 
-fn send_packet(sock: &mut TcpStream, pkt: &Packet, cipher: &mut Option<Cipher>) {
+fn send_packet(sock: &mut TcpStream, pkt: &Packet, cipher: &mut Option<Cipher>) -> Result<(), std::io::Error> {
     println!("sending to {:?}", sock);
     let mut buf = pkt.as_bytes();
     print_buffer(&buf);
     if let Some(ref mut cipher) = cipher {
         buf = cipher.encrypt(&buf);
     }
-    while let Err(_) = sock.write_all(&buf) {
-        continue;
+
+    loop {
+        match sock.write_all(&buf) {
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::WouldBlock {
+                    continue
+                }
+                else {
+                    println!("erroring {:?}!", err);
+                    return Err(err)
+                }
+            },
+            _ => return Ok(()),
+        }
     }
 }
 
 impl Proxy {
     pub fn new(sock: net::TcpStream) -> Proxy {
-        //let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(172,245,5,200), PSOPORT))).unwrap();
-        let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(99,199,199,42), PSOPORT))).unwrap();
-        //let server = TcpStream::connect(&SocketAddr::from((Ipv4Addr::new(27, 134, 247, 108), PSOPORT))).unwrap();
-
-        // TODO: delete and remake fifo pipe
-        /*let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
-        let cmd_pipe = OpenOptions::new()
-            .custom_flags(libc::O_NONBLOCK)
-            .read(true)
-            .open("/tmp/darkbridge").unwrap();*/
+        let server = TcpStream::connect(SocketAddr::from((TARGET_SERVER, PSOPORT))).unwrap();
 
         Proxy {
-            gamecube: TcpStream::from_stream(sock).unwrap(),
+            gamecube: TcpStream::from_std(sock),
             server: server,
             listener: None,
             //cmd_pipe: cmd_pipe,
@@ -172,11 +190,11 @@ impl Proxy {
         pkts
     }
 
-    fn send_packets(&mut self, pkts: Vec<TargettedPacket>) {
+    fn send_packets(&mut self, pkts: Vec<TargettedPacket>) -> Result<(), std::io::Error>{
         for pkt in pkts {
             match pkt {
                 TargettedPacket::Client(p) => {
-                    send_packet(&mut self.gamecube, &p, &mut self.proxy2gamecube);
+                    send_packet(&mut self.gamecube, &p, &mut self.proxy2gamecube)?;
 
                     if let Packet::EncryptionKeys(ref keys) = p {
                         println!("encryption keys! c: {:08X} s: {:08X}", keys.client_seed, keys.server_seed);
@@ -187,23 +205,23 @@ impl Proxy {
                     }
                 },
                 TargettedPacket::Server(p) => {
-                    send_packet(&mut self.server, &p, &mut self.proxy2server);
+                    send_packet(&mut self.server, &p, &mut self.proxy2server)?;
                 }
             }
         }
-
+        Ok(())
     }
 
-    pub fn run(&mut self){
+    pub fn run(&mut self) -> Result<(), std::io::Error> {
         let _ = unistd::mkfifo("/tmp/darkbridge", stat::Mode::S_IRWXU);
         let mut cmd_pipe = OpenOptions::new()
             .custom_flags(libc::O_NONBLOCK)
             .read(true)
             .open("/tmp/darkbridge").unwrap();
 
-        self.poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
-        self.poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
-        self.poll.register(&EventedFd(&cmd_pipe.as_raw_fd()), CMDPIPE, Ready::readable(), PollOpt::edge()).unwrap();
+        self.poll.registry().register(&mut self.gamecube, GAMECUBE, Interest::READABLE).unwrap();
+        self.poll.registry().register(&mut self.server, SERVER, Interest::READABLE).unwrap();
+        self.poll.registry().register(&mut SourceFd(&cmd_pipe.as_raw_fd()), CMDPIPE, Interest::READABLE).unwrap();
 
         let mut commandrunner = CommandRunner::new();
 
@@ -223,7 +241,7 @@ impl Proxy {
                         while let Some(pkt) = get_packet(&self.gamecube, &mut self.gamecube2proxy) {
                             println!("gc! {:?}", pkt);
                             let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Server(pkt));
-                            self.send_packets(filtered_pkts);
+                            self.send_packets(filtered_pkts)?;
                         }
                     },
                     SERVER => {
@@ -231,7 +249,7 @@ impl Proxy {
                         while let Some(pkt) = get_packet(&self.server, &mut self.server2proxy) {
                             println!("serv! {:?}", pkt);
                             let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Client(pkt));
-                            self.send_packets(filtered_pkts);
+                            self.send_packets(filtered_pkts)?;
                         }
                     },
                     LISTENER => {
@@ -243,8 +261,8 @@ impl Proxy {
                             self.proxy2server = None;
                             self.gamecube2proxy = None;
                             self.proxy2gamecube = None;
-                            self.poll.register(&self.gamecube, GAMECUBE, Ready::readable(), PollOpt::edge()).unwrap();
-                            self.poll.register(&self.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
+                            self.poll.registry().register(&mut self.gamecube, GAMECUBE, Interest::READABLE).unwrap();
+                            self.poll.registry().register(&mut self.server, SERVER, Interest::READABLE).unwrap();
                             //listener.shutdown();
                         }
                         self.listener = None;
@@ -257,7 +275,7 @@ impl Proxy {
                             match command {
                                 Ok(c) => {
                                     let pkts = commandrunner.run(c, self);
-                                    self.send_packets(pkts);
+                                    self.send_packets(pkts)?;
                                 },
                                 Err(err) => println!("!!! command error: {:?}", err),
                             }

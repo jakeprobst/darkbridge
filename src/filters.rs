@@ -1,10 +1,12 @@
 use mio::*;
-use mio::tcp::{TcpStream, TcpListener};
+use mio::net::{TcpStream, TcpListener};
 use std::net::{SocketAddr, Ipv4Addr};
 
 use crate::proxy::{Proxy, SERVER, LISTENER};
 use crate::packet::Packet;
 use crate::gamecommand::{GameCommand, GameCommandAction};
+
+const LOCAL_PROXY_IP: [u8; 4] = [10, 0, 0, 179];
 
 #[derive(Debug, Clone)]
 pub enum TargettedPacket {
@@ -18,20 +20,20 @@ pub fn connection_redirect(mut pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<T
     if let TargettedPacket::Client(ref mut pkt) = pkt {
         if let Packet::Redirect(ref mut redirect) = pkt {
             println!("redirecting! {:?}:{}", redirect.ip, redirect.port);
-            let new_sock = TcpStream::connect(&SocketAddr::from((redirect.ip, redirect.port))).unwrap();
-            //poll.deregister(&self.server).unwrap();
+            let new_sock = TcpStream::connect(SocketAddr::from((redirect.ip, redirect.port))).unwrap();
+            //poll.registry().deregister(&self.server).unwrap();
             proxy.server = new_sock;
-            proxy.poll.register(&proxy.server, SERVER, Ready::readable(), PollOpt::edge()).unwrap();
+            proxy.poll.registry().register(&mut proxy.server, SERVER, Interest::READABLE).unwrap();
 
             proxy.server2proxy = None;
             proxy.proxy2server = None;
 
-            redirect.ip = [192, 168, 1, 10];
-            let ls = TcpListener::bind(&SocketAddr::from((Ipv4Addr::new(0,0,0,0), 0))).unwrap();
+            redirect.ip = LOCAL_PROXY_IP;
+            let mut ls = TcpListener::bind(SocketAddr::from((Ipv4Addr::new(0,0,0,0), 0))).unwrap();
             redirect.port = ls.local_addr().unwrap().port();
             println!("re-redirecting! {:?}:{}", redirect.ip, redirect.port);
-            proxy.poll.register(&ls, LISTENER, Ready::readable(), PollOpt::edge()).unwrap();
-            proxy.poll.deregister(&proxy.server).unwrap();
+            proxy.poll.registry().register(&mut ls, LISTENER, Interest::READABLE).unwrap();
+            proxy.poll.registry().deregister(&mut proxy.server).unwrap();
             println!("listening on: {:?}", ls);
             proxy.listener = Some(ls);
         }
