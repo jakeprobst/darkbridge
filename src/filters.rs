@@ -34,6 +34,7 @@ pub fn connection_redirect(mut pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<T
             println!("re-redirecting! {:?}:{}", redirect.ip, redirect.port);
             proxy.poll.registry().register(&mut ls, LISTENER, Interest::READABLE).unwrap();
             proxy.poll.registry().deregister(&mut proxy.server).unwrap();
+            proxy.poll.registry().deregister(&mut proxy.gamecube).unwrap();
             println!("listening on: {:?}", ls);
             proxy.listener = Some(ls);
         }
