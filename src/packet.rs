@@ -215,6 +215,7 @@ pub enum Packet {
     //ItemDrop(ItemDrop),
 
     PlayerInventory(RawData),
+    PlayerInformation(RawData),
     RawData(RawData)
 }
 
@@ -222,14 +223,15 @@ pub enum Packet {
 
 
 impl Packet {
-    pub fn parse(cmd: u8, flag: u8, len: u16, data: &Vec<u8>) -> Packet {
+    pub fn parse(cmd: u8, flag: u8, _len: u16, data: &Vec<u8>) -> Packet {
         match cmd {
             0x06 => Packet::ChatMessage(ChatMessage::parse(cmd, flag, data)),
             0x60 => Packet::GameCommand(GameCommand::parse(cmd, flag, data)),
             0x19 => Packet::Redirect(Redirect::parse(cmd, flag, data)),
             0x17 | 0x02 => Packet::EncryptionKeys(EncryptionKeys::parse(cmd, flag, data)),
             0x9A => Packet::AllowDenyAccess(AllowDenyAccess::parse(cmd, flag, data)),
-            0x67 => Packet::PlayerInventory(RawData::parse(cmd, flag, data)),
+            0x61 => Packet::PlayerInventory(RawData::parse(cmd, flag, data)),
+            0x9E => Packet::PlayerInformation(RawData::parse(cmd, flag, data)),
             _ => Packet::RawData(RawData::parse(cmd, flag, data))
         }
     }
@@ -239,10 +241,11 @@ impl Packet {
             Packet::Redirect(pkt) => pkt.as_bytes(),
             Packet::EncryptionKeys(pkt) => pkt.as_bytes(),
             Packet::AllowDenyAccess(pkt) => pkt.as_bytes(),
-            Packet::RawData(pkt) => pkt.as_bytes(),
             Packet::GameCommand(pkt) => pkt.as_bytes(),
             Packet::ChatMessage(pkt) => pkt.as_bytes(),
             Packet::PlayerInventory(pkt) => pkt.as_bytes(),
+            Packet::PlayerInformation(pkt) => pkt.as_bytes(),
+            Packet::RawData(pkt) => pkt.as_bytes(),
         }
     }
 }

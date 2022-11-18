@@ -89,15 +89,16 @@ pub fn chat_command(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPac
 }
 
 pub fn update_inventory(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
-    if let TargettedPacket::Client(ref spkt) = pkt {
+    if let TargettedPacket::Server(ref spkt) = pkt {
         if let Packet::PlayerInventory(inventory_data) = spkt {
             proxy.gamestate.inventory = inventory_data.data.iter()
-                .skip(0x3C-4)
+                //.skip(0x3C-4)
+                .skip(0x10-4)
                 .array_chunks::<28>()
                 .filter_map(|chunk| {
-                    dbg!(&chunk);
+                    //dbg!(&chunk);
                     let item = Item::try_from(chunk).ok();
-                    dbg!(&item);
+                    //dbg!(&item);
                     item
                 })
                 .collect();
