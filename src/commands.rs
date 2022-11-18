@@ -403,7 +403,7 @@ impl CommandRunner {
             Command::Restore(restore) => {
                 let restore_items = restore
                     .into_iter()
-                    .map(|tool_type| {
+                    .filter_map(|tool_type| {
                         let amount_in_inventory = proxy.gamestate.inventory
                             .iter()
                             .filter_map(|item| {
@@ -415,7 +415,13 @@ impl CommandRunner {
                             .next()
                             .unwrap_or(0);
 
-                        MakeItem {item: Box::new(Tool {tool: tool_type, stack: tool_type.max_stack() - amount_in_inventory })}
+                        let amount = tool_type.max_stack() - amount_in_inventory;
+                        if amount > 0 {
+                            Some(MakeItem {item: Box::new(Tool {tool: tool_type, stack: amount })})
+                        }
+                        else {
+                            None
+                        }
                     })
                     .chain(std::iter::once(MakeItem {item: Box::new(Meseta {amount: 999999})}))
                     .collect::<Vec<_>>();
