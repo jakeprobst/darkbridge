@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use crate::filters::TargettedPacket;
 use crate::proxy::Proxy;
-use crate::proxy::GameState;
+use crate::proxy::{GameState, Position};
 use crate::packet::{Packet, RawData, PacketData};
 use crate::gamecommand::{GameCommand, GameCommandAction, ItemDrop};
 use crate::items::*;
@@ -265,20 +265,20 @@ impl MakeItem {
         })
     }
 
-    fn as_packet(&self, gamestate: &mut GameState) -> Packet {
-        gamestate.itemdrop_id += 0x10000;
+    fn as_packet(&self, floor: u32, position: Position, item_id: u32) -> Packet {
         Packet::GameCommand(GameCommand {
             flag: 0,
             client: 0,
             unknown: 0,
             cmd: GameCommandAction::ItemDrop(ItemDrop {
-                floor: gamestate.floor,
-                x: gamestate.position.x,
-                z: gamestate.position.z,
+                floor: floor,
+                x: position.x,
+                z: position.z,
+                y: position.y,
                 item_row1: self.item.row1(),
                 item_row2: self.item.row2(),
                 item_row3: self.item.row3(),
-                itemdrop_id: gamestate.itemdrop_id,
+                itemdrop_id: item_id,
                 item_row4: self.item.row4(),
                 unknown: 2,
             })})
@@ -319,11 +319,35 @@ impl RawPacket {
 }
 
 
+fn restore_parse(cmd: Vec<&str>) -> Result<Vec<ToolType>, CommandError> {
+    Ok(cmd
+        .iter()
+        .flat_map(|cmd| {
+            cmd.split(",")
+        })
+        .filter_map(|cmd| {
+            match cmd {
+                "mm" => Some(ToolType::Monomate),
+                "dm" => Some(ToolType::Dimate),
+                "tm" => Some(ToolType::Trimate),
+                "mf" => Some(ToolType::Monofluid),
+                "df" => Some(ToolType::Difluid),
+                "tf" => Some(ToolType::Trifluid),
+                "sa" => Some(ToolType::SolAtomizer),
+                "ma" => Some(ToolType::MoonAtomizer),
+                "sd" => Some(ToolType::ScapeDoll),
+                _ => None
+            }
+        })
+       .collect())
+
+}
+
+
 #[derive(Debug)]
 pub enum Command {
-    ItemCircleStart,
-    ItemCircleEnd,
     MakeItem(MakeItem),
+    Restore(Vec<ToolType>),
     RawPacket(RawPacket),
 }
 
@@ -344,8 +368,7 @@ impl Command {
             "meseta" => Ok(Command::MakeItem(MakeItem::parse_meseta(split)?)),
             "rawitem" => Ok(Command::MakeItem(MakeItem::parse_raw(split)?)),
             "raw" => Ok(Command::RawPacket(RawPacket::parse(split)?)),
-            "itemcirclestart" => Ok(Command::ItemCircleStart),
-            "itemcircleend" => Ok(Command::ItemCircleEnd),
+            "restore" => Ok(Command::Restore(restore_parse(split)?)),
             _ => Err(CommandError::UnknownCommand(data))
         }
     }
@@ -369,25 +392,53 @@ impl CommandRunner {
     }
 
     pub fn run(&mut self, cmd: Command, proxy: &mut Proxy) -> Vec<TargettedPacket> {
-        let mut result = Vec::new();
         match cmd {
-            Command::ItemCircleStart => {
-                self.item_circle = Some(Vec::new())
-            },
-            Command::ItemCircleEnd => {
-                // wew all the packets
-                self.item_circle = None
-            }
             Command::MakeItem(makeitem) => {
-                let pkt = makeitem.as_packet(&mut proxy.gamestate);
+                let pkt = makeitem.as_packet(proxy.gamestate.floor, proxy.gamestate.position, proxy.gamestate.item_id());
+                let mut result = Vec::new();
                 result.push(TargettedPacket::Client(pkt.clone()));
                 result.push(TargettedPacket::Server(pkt));
+                result
             },
-            Command::RawPacket(raw) => {
-                result.push(raw.as_packet());
+            Command::Restore(restore) => {
+                let restore_items = restore
+                    .into_iter()
+                    .map(|tool_type| {
+                        let amount_in_inventory = proxy.gamestate.inventory
+                            .iter()
+                            .filter_map(|item| {
+                                match item {
+                                    Item::Tool(tool, amount) if *tool == tool_type => Some(*amount),
+                                    _ => None
+                                }
+                            })
+                            .next()
+                            .unwrap_or(0);
+
+                        MakeItem {item: Box::new(Tool {tool: tool_type, stack: tool_type.max_stack() - amount_in_inventory })}
+                    })
+                    .chain(std::iter::once(MakeItem {item: Box::new(Meseta {amount: 999999})}))
+                    .collect::<Vec<_>>();
+
+                let total_size = restore_items.len() as f32;
+                restore_items
+                    .into_iter()
+                    .enumerate()
+                    .flat_map(|(i, makeitem)| {
+                        let mut position = proxy.gamestate.position;
+
+                        position.x += (2.0*std::f32::consts::PI*((i as f32)/total_size)).sin() * 12.0;
+                        position.z += (2.0*std::f32::consts::PI*((i as f32)/total_size)).cos() * 12.0;
+
+                        let pkt = makeitem.as_packet(proxy.gamestate.floor, position, proxy.gamestate.item_id());
+                        vec![TargettedPacket::Client(pkt.clone()), TargettedPacket::Server(pkt)]
+                    })
+                    .collect()
             }
-        };
-        result
+            Command::RawPacket(raw) => {
+                vec![raw.as_packet()]
+            }
+        }
     }
 }
 
@@ -413,7 +464,7 @@ mod tests {
             println!("{:08X}", makeitem.item.row1());
             println!("{:08X}", makeitem.item.row2());
             println!("{:08X}", makeitem.item.row3());
-            dbg!(makeitem.as_packet(&mut gs));
+            dbg!(makeitem.as_packet(gs.floor, gs.position, gs.item_id()));
         };
 
         let cmd = Command::parse("weapon notreal 100n 100a 100h".to_string());
@@ -447,7 +498,7 @@ mod tests {
             println!("{:08X}", makeitem.item.row2());
             println!("{:08X}", makeitem.item.row3());
             println!("{:08X}", makeitem.item.row4());
-            dbg!(makeitem.as_packet(&mut gs));
+            dbg!(makeitem.as_packet(gs.floor, gs.position, gs.item_id()));
         };
     }
 }

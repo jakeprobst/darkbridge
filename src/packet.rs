@@ -1,5 +1,5 @@
 use std::io::Cursor;
-use std::io::{Read, Write};
+use std::io::{Read, Write, BufRead, Seek, SeekFrom};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian, BigEndian};
 use crate::gamecommand::*;
 
@@ -131,10 +131,77 @@ impl PacketData for EncryptionKeys {
 
 
 
+//0000 | 06 00 1C 00 00 00 00 00 EC 36 32 A0 41 73 70 68 | .........62.Asph |
+//0010 | 6F 64 65 6C 09 09 4A 31 32 33 00 00             | odel..J123..     |
+
+//0000 | 06 00 20 00 00 00 00 00 EC 36 32 A0 41 73 70 68 | .........62.Asph |
+//0010 | 6F 64 65 6C 09 09 4A 31 32 33 34 35 36 37 38 00 | odel..J12345678. |
+// 06 00 20 00
+// 00 00 00 00
+// EC 36 32 A0
+// 41 73 70 68 6F 64 65 6C 09 09
+// 4A 31 32 33 34 35 36 37 38 00
+
 
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
+    //pub guildcard: u32,
+    raw: Vec<u8>,
+    //pub character: String,
+    pub message: String,
+}
 
+impl ChatMessage {
+    fn parse(_cmd: u8, _flag: u8, data: &Vec<u8>) -> ChatMessage {
+        let mut cur = Cursor::new(data.clone());
+        /*
+        let _ = cur.read_u32::<BigEndian>().unwrap();
+        let _guildcard = cur.read_u32::<BigEndian>().unwrap();
+
+        let mut raw_character = Vec::new();
+        cur.read_until(0x09, &mut raw_character).unwrap();
+        let character = String::from_utf8_lossy(&raw_character).into();
+
+        cur.seek(SeekFrom::Current(2)).unwrap();
+
+        let mut raw_message = Vec::new();
+        cur.read_until(0x09, &mut raw_message).unwrap();
+        let message = String::from_utf8_lossy(&raw_message).into();
+         */
+
+        let mut raw_message = Vec::new();
+        let mut message = String::new();
+        while let Ok(k) = cur.read_until(0x09, &mut raw_message) {
+            if k == 0 {
+                break
+            }
+            message = String::from_utf8_lossy(&raw_message).into();
+            raw_message.clear();
+        }
+
+        let message = message
+            .chars()
+            .skip(1)
+            .filter(|c| *c != '\0')
+            .collect();
+        dbg!(&message);
+
+        ChatMessage {
+            //guildcard,
+            raw: data.clone(),
+            //character,
+            message,
+        }
+    }
+
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        buf.write_u8(0x06).unwrap();
+        buf.write_u8(0).unwrap();
+        buf.write_u16::<LittleEndian>(4 + self.raw.len() as u16).unwrap();
+        buf.extend(&self.raw);
+        buf
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -144,21 +211,25 @@ pub enum Packet {
     AllowDenyAccess(AllowDenyAccess),
 
     GameCommand(GameCommand),
-    //ChatMessage(ChatMessage),
+    ChatMessage(ChatMessage),
     //ItemDrop(ItemDrop),
 
+    PlayerInventory(RawData),
     RawData(RawData)
 }
+
 
 
 
 impl Packet {
     pub fn parse(cmd: u8, flag: u8, len: u16, data: &Vec<u8>) -> Packet {
         match cmd {
+            0x06 => Packet::ChatMessage(ChatMessage::parse(cmd, flag, data)),
             0x60 => Packet::GameCommand(GameCommand::parse(cmd, flag, data)),
             0x19 => Packet::Redirect(Redirect::parse(cmd, flag, data)),
             0x17 | 0x02 => Packet::EncryptionKeys(EncryptionKeys::parse(cmd, flag, data)),
             0x9A => Packet::AllowDenyAccess(AllowDenyAccess::parse(cmd, flag, data)),
+            0x67 => Packet::PlayerInventory(RawData::parse(cmd, flag, data)),
             _ => Packet::RawData(RawData::parse(cmd, flag, data))
         }
     }
@@ -170,6 +241,8 @@ impl Packet {
             Packet::AllowDenyAccess(pkt) => pkt.as_bytes(),
             Packet::RawData(pkt) => pkt.as_bytes(),
             Packet::GameCommand(pkt) => pkt.as_bytes(),
+            Packet::ChatMessage(pkt) => pkt.as_bytes(),
+            Packet::PlayerInventory(pkt) => pkt.as_bytes(),
         }
     }
 }

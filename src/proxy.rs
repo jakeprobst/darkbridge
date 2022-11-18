@@ -22,9 +22,9 @@ use crate::commands::{Command, CommandRunner};
 const PSOPORT: u16 = 9100;
 
 // unseen
-//const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(47, 87, 165, 199);
+const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(47, 87, 165, 199);
 // scht
-const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(149, 56, 167, 128);
+//const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(149, 56, 167, 128);
 // elsewhere
 //const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(45, 33, 31, 247);
 
@@ -34,7 +34,7 @@ pub const SERVER: Token = Token(1);
 pub const LISTENER: Token = Token(2);
 pub const CMDPIPE: Token = Token(3);
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -46,6 +46,7 @@ pub struct GameState {
     pub floor: u32,
     pub position: Position,
     pub itemdrop_id: u32,
+    pub inventory: Vec<crate::items::Item>,
 }
 
 impl GameState {
@@ -55,7 +56,13 @@ impl GameState {
             floor: 0,
             position: Position {x:0.0, y:0.0, z:0.0},
             itemdrop_id: 0x11223344,
+            inventory: Vec::new(),
         }
+    }
+
+    pub fn item_id(&mut self) -> u32 {
+        self.itemdrop_id += 0x10000;
+        self.itemdrop_id
     }
 }
 
@@ -228,6 +235,8 @@ impl Proxy {
         let mut filters: Vec<Box<filters::Filter>> = Vec::new();
         filters.push(Box::new(filters::connection_redirect));
         filters.push(Box::new(filters::save_position));
+        filters.push(Box::new(filters::chat_command));
+        filters.push(Box::new(filters::update_inventory));
 
         let mut events = Events::with_capacity(64);
 
@@ -247,7 +256,7 @@ impl Proxy {
                     SERVER => {
                         println!("[SERVER]");
                         while let Some(pkt) = get_packet(&self.server, &mut self.server2proxy) {
-                            println!("serv! {:?}", pkt);
+                            //println!("serv! {:?}", pkt);
                             let filtered_pkts = self.filter_packet(&filters, TargettedPacket::Client(pkt));
                             self.send_packets(filtered_pkts)?;
                         }

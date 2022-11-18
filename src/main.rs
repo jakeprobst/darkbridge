@@ -1,3 +1,5 @@
+#![feature(iter_array_chunks)]
+
 mod filters;
 mod proxy;
 mod cipher;
@@ -5,6 +7,8 @@ mod gamecommand;
 mod packet;
 mod commands;
 mod items;
+
+use std::convert::TryInto;
 
 use proxy::Proxy;
 
@@ -15,6 +19,15 @@ use std::net::{SocketAddr, Ipv4Addr};
 use mio::net::TcpStream;
 
 const PSOPORT: u16 = 9100;
+
+
+// TODO: FEATURES
+// TODO: saved chatlogs
+// TODO: hit fence -> drop hunters report
+// TODO: chat commands
+// TODO: dps meter
+// TODO: handlers for specific events (join game, etc?)
+const TARGET_SERVER: Ipv4Addr = Ipv4Addr::new(149, 56, 167, 128);
 
 fn main() {
     //let listener = TcpListener::bind(("localhost", PSOPORT)).unwrap();

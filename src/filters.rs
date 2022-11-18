@@ -1,10 +1,14 @@
+use std::convert::TryFrom;
+
 use mio::*;
 use mio::net::{TcpStream, TcpListener};
 use std::net::{SocketAddr, Ipv4Addr};
 
 use crate::proxy::{Proxy, SERVER, LISTENER};
 use crate::packet::Packet;
+use crate::items::Item;
 use crate::gamecommand::{GameCommand, GameCommandAction};
+use crate::commands::{Command, CommandRunner};
 
 const LOCAL_PROXY_IP: [u8; 4] = [10, 0, 0, 179];
 
@@ -64,5 +68,41 @@ pub fn save_position(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPa
         }
     }
 
+    vec![pkt]
+}
+
+
+pub fn chat_command(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
+    if let TargettedPacket::Server(ref spkt) = pkt {
+        if let Packet::ChatMessage(chatmsg) = spkt {
+            if chatmsg.message.starts_with("/") {
+                println!("chat msg! {:?}", chatmsg.message);
+                let command = Command::parse(chatmsg.message.to_ascii_lowercase().chars().skip(1).collect());
+                let mut commandrunner = CommandRunner::new();
+                return command.map(|command| {
+                    commandrunner.run(command, proxy)
+                }).unwrap_or(Vec::new())
+            }
+        }
+    }
+    vec![pkt]
+}
+
+pub fn update_inventory(pkt: TargettedPacket, proxy: &mut Proxy) -> Vec<TargettedPacket> {
+    if let TargettedPacket::Client(ref spkt) = pkt {
+        if let Packet::PlayerInventory(inventory_data) = spkt {
+            proxy.gamestate.inventory = inventory_data.data.iter()
+                .skip(0x3C-4)
+                .array_chunks::<28>()
+                .filter_map(|chunk| {
+                    dbg!(&chunk);
+                    let item = Item::try_from(chunk).ok();
+                    dbg!(&item);
+                    item
+                })
+                .collect();
+            dbg!(&proxy.gamestate.inventory);
+        }
+    }
     vec![pkt]
 }

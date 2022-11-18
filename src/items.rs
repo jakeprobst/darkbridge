@@ -15,6 +15,7 @@ pub enum ItemParseError {
     UnknownPhotonBlast(String),
     ParseIntError(std::num::ParseIntError),
     HexError(hex::FromHexError),
+    UnknownValue(u32),
 }
 
 impl From<std::num::ParseIntError> for ItemParseError {
@@ -2052,7 +2053,7 @@ impl ItemData for Unit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ToolType {
     Monomate,
     Dimate,
@@ -2273,6 +2274,119 @@ impl TryFrom<&str> for ToolType {
     }
 }
 
+impl TryFrom<u32> for ToolType {
+    type Error = ItemParseError;
+    fn try_from(value: u32) -> Result<ToolType, ItemParseError> {
+        match value {
+            0x030000 => Ok(ToolType::Monomate),
+            0x030001 => Ok(ToolType::Dimate),
+            0x030002 => Ok(ToolType::Trimate),
+            0x030100 => Ok(ToolType::Monofluid),
+            0x030101 => Ok(ToolType::Difluid),
+            0x030102 => Ok(ToolType::Trifluid),
+            0x030300 => Ok(ToolType::SolAtomizer),
+            0x030400 => Ok(ToolType::MoonAtomizer),
+            0x030500 => Ok(ToolType::StarAtomizer),
+            0x030600 => Ok(ToolType::Antidote),
+            0x030601 => Ok(ToolType::Antiparalysis),
+            0x030700 => Ok(ToolType::Telepipe),
+            0x030800 => Ok(ToolType::TrapVision),
+            0x030900 => Ok(ToolType::ScapeDoll),
+            0x030A00 => Ok(ToolType::Monogrinder),
+            0x030A01 => Ok(ToolType::Digrinder),
+            0x030A02 => Ok(ToolType::Trigrinder),
+            0x030B00 => Ok(ToolType::PowerMaterial),
+            0x030B01 => Ok(ToolType::MindMaterial),
+            0x030B02 => Ok(ToolType::EvadeMaterial),
+            0x030B03 => Ok(ToolType::HPMaterial),
+            0x030B04 => Ok(ToolType::TPMaterial),
+            0x030B05 => Ok(ToolType::DefMaterial),
+            0x030B06 => Ok(ToolType::LuckMaterial),
+            0x030C00 => Ok(ToolType::CellofMag502),
+            0x030C01 => Ok(ToolType::CellofMag213),
+            0x030C02 => Ok(ToolType::PartsofRoboChao),
+            0x030C03 => Ok(ToolType::HeartofOpaOpa),
+            0x030C04 => Ok(ToolType::HeartofPian),
+            0x030C05 => Ok(ToolType::HeartofChao),
+            0x030D00 => Ok(ToolType::SorcerersRightArm),
+            0x030D01 => Ok(ToolType::SbeatsArms),
+            0x030D02 => Ok(ToolType::ParmsArms),
+            0x030D03 => Ok(ToolType::DelsabersRightArm),
+            0x030D04 => Ok(ToolType::BringersRightArm),
+            0x030D05 => Ok(ToolType::DelsabersLeftArm),
+            0x030D06 => Ok(ToolType::SredsArms),
+            0x030D07 => Ok(ToolType::DragonsClaw),
+            0x030D08 => Ok(ToolType::HildebearsHead),
+            0x030D09 => Ok(ToolType::HildebluesHead),
+            0x030D0A => Ok(ToolType::PartsofBaranz),
+            0x030D0B => Ok(ToolType::BelrasRightArm),
+            0x030D0C => Ok(ToolType::GiGuesbody),
+            0x030D0D => Ok(ToolType::SinowBerillsArms),
+            0x030D0E => Ok(ToolType::GrassAssassinsArms),
+            0x030D0F => Ok(ToolType::BoomasRightArm),
+            0x030D10 => Ok(ToolType::GoboomasRightArm),
+            0x030D11 => Ok(ToolType::GigoboomasRightArm),
+            0x030D12 => Ok(ToolType::GalGryphonsWing),
+            0x030D13 => Ok(ToolType::RappysWing),
+            0x030D14 => Ok(ToolType::CladdingofEpsilon),
+            0x030D15 => Ok(ToolType::DeRolLeShell),
+            0x030E00 => Ok(ToolType::BerillPhoton),
+            0x030E01 => Ok(ToolType::ParasiticgeneFlow),
+            0x030E02 => Ok(ToolType::MagicStoneIritista),
+            0x030E03 => Ok(ToolType::Blueblackstone),
+            0x030E04 => Ok(ToolType::Syncesta),
+            0x030E05 => Ok(ToolType::MagicWater),
+            0x030E06 => Ok(ToolType::ParasiticcellTypeD),
+            0x030E07 => Ok(ToolType::MagicrockHeartKey),
+            0x030E08 => Ok(ToolType::MagicrockMoola),
+            0x030E09 => Ok(ToolType::StarAmplifier),
+            0x030E0A => Ok(ToolType::BookofHitogata),
+            0x030E0B => Ok(ToolType::HeartofChuChu),
+            0x030E0C => Ok(ToolType::PartsofEggBlaster),
+            0x030E0D => Ok(ToolType::HeartofAngel),
+            0x030E0E => Ok(ToolType::HeartofDevil),
+            0x030E0F => Ok(ToolType::KitofHamburger),
+            0x030E10 => Ok(ToolType::PanthersSpirit),
+            0x030E11 => Ok(ToolType::KitofMarkIII),
+            0x030E12 => Ok(ToolType::KitofMasterSystem),
+            0x030E13 => Ok(ToolType::KitofGenesis),
+            0x030E14 => Ok(ToolType::KitofSegaSaturn),
+            0x030E15 => Ok(ToolType::KitofDreamcast),
+            0x030E16 => Ok(ToolType::AmplifierofResta),
+            0x030E17 => Ok(ToolType::AmplifierofAnti),
+            0x030E18 => Ok(ToolType::AmplifierofShifta),
+            0x030E19 => Ok(ToolType::AmplifierofDeband),
+            0x030E1A => Ok(ToolType::AmplifierofFoie),
+            0x030E1B => Ok(ToolType::AmplifierofGifoie),
+            0x030E1C => Ok(ToolType::AmplifierofRafoie),
+            0x030E1D => Ok(ToolType::AmplifierofBarta),
+            0x030E1E => Ok(ToolType::AmplifierofGibarta),
+            0x030E1F => Ok(ToolType::AmplifierofRabarta),
+            0x030E20 => Ok(ToolType::AmplifierofZonde),
+            0x030E21 => Ok(ToolType::AmplifierofGizonde),
+            0x030E22 => Ok(ToolType::AmplifierofRazonde),
+            0x030E23 => Ok(ToolType::AmplifierofRed),
+            0x030E24 => Ok(ToolType::AmplifierofBlue),
+            0x030E25 => Ok(ToolType::AmplifierofYellow),
+            0x030E26 => Ok(ToolType::HeartofKapuKapu),
+            0x030E27 => Ok(ToolType::PhotonBooster),
+            0x030F00 => Ok(ToolType::AddSlot),
+            0x031000 => Ok(ToolType::PhotonDrop),
+            0x031001 => Ok(ToolType::PhotonSphere),
+            0x031002 => Ok(ToolType::PhotonCrystal),
+            0x031500 => Ok(ToolType::ChristmasPresent),
+            0x031501 => Ok(ToolType::EasterEgg),
+            0x031502 => Ok(ToolType::JackOLantern),
+            0x031700 => Ok(ToolType::HuntersReportA),
+            0x031701 => Ok(ToolType::HuntersReportB),
+            0x031702 => Ok(ToolType::HuntersReportC),
+            0x031703 => Ok(ToolType::HuntersReportD),
+            0x031704 => Ok(ToolType::HuntersReportF),
+            _ => Err(ItemParseError::UnknownValue(value))
+        }
+    }
+}
+
 impl ToolType {
     fn as_value(&self) -> u32 {
         match self {
@@ -2380,6 +2494,25 @@ impl ToolType {
             ToolType::HuntersReportC => 0x031702,
             ToolType::HuntersReportD => 0x031703,
             ToolType::HuntersReportF => 0x031704,
+        }
+    }
+
+    pub fn max_stack(&self) -> u8 {
+        match self {
+            ToolType::Monomate => 10,
+            ToolType::Dimate => 10,
+            ToolType::Trimate => 10,
+            ToolType::Monofluid => 10,
+            ToolType::Difluid => 10,
+            ToolType::Trifluid => 10,
+            ToolType::SolAtomizer => 10,
+            ToolType::MoonAtomizer => 10,
+            ToolType::StarAtomizer => 10,
+            ToolType::Antidote => 10,
+            ToolType::Antiparalysis => 10,
+            ToolType::Telepipe => 10,
+            ToolType::TrapVision => 10,
+            _ => 1,
         }
     }
 }
@@ -2909,6 +3042,30 @@ impl ItemData for RawItemData {
 
     fn row4(&self) -> u32 {
         self.get_row(3)
+    }
+}
+
+
+#[derive(Debug)]
+pub enum Item {
+    Weapon(Weapon),
+    Armor(Armor),
+    Shield(Shield),
+    Unit(Unit),
+    Mag(Mag),
+    Tool(ToolType, u8),
+}
+
+impl TryFrom<[&u8; 28]> for Item {
+    type Error = ItemParseError;
+    fn try_from(value: [&u8; 28]) -> Result<Item, ItemParseError> {
+        let item_value = u32::from_be_bytes([0, *value[0], *value[1], *value[2]]);
+        println!("item_value! {:X}", item_value);
+        if let Ok(tool) = ToolType::try_from(item_value) {
+            return Ok(Item::Tool(tool, *value[5]))
+        }
+
+        Err(ItemParseError::UnknownValue(item_value))
     }
 }
 

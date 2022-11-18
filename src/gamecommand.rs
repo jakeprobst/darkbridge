@@ -213,6 +213,7 @@ pub struct ItemDrop {
     pub floor: u32,
     pub x: f32,
     pub z: f32,
+    pub y: f32,
     pub item_row1: u32,
     pub item_row2: u32,
     pub item_row3: u32,
@@ -241,6 +242,7 @@ impl /*GameCommandData for*/ ItemDrop {
             ._u32(self.floor)
             ._f32(self.x)
             ._f32(self.z)
+            //._f32(self.y)
             ._u32_be(self.item_row1)
             ._u32_be(self.item_row2)
             ._u32_be(self.item_row3)
