@@ -2854,8 +2854,8 @@ impl MagType {
             MagType::Pushan => 0x023D00,
             MagType::Diwari => 0x023E00,
             MagType::Sato => 0x023F00,
-            MagType::Bhima => 0x240000,
-            MagType::Nidra => 0x241000,
+            MagType::Bhima => 0x024000,
+            MagType::Nidra => 0x024100,
         }
     }
 }
